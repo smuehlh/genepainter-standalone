@@ -1,0 +1,128 @@
+INTRODUCTION
+------------
+The conservation of intron positions comprises information useful for de novo gene prediction as well as for analyzing the origin of introns. Here, we present GenePainter, a standalone tool for mapping gene structures onto protein multiple sequence alignments (MSA). Gene structures, as provided by WebScipio, are aligned with respect to the exact positions of the introns (down to nucleotide level) and intron phase. Output can be viewed in various formats, ranging from plain text to graphical output formats.
+
+
+INSTALLATION
+------------
+
+Unpack
+------
+Use one of the following methods, depending on the type of your archive file:
+$ unzip gene_painter.zip
+$ tar -xzf gene_painter.tgz
+
+
+Compilation
+-----------
+No compilation required.
+
+
+Ruby version
+------------
+Ruby version 1.9.2 or higher is required. If necessary, consider using Ruby Version Manager (RVM; https://rvm.io/) to install and work with multiple ruby environments on your machine. 
+
+
+RUNNING GENEPAINTER
+-------------------
+
+Ruby interpreter
+----------------
+Invoke GenePainter via one of the following options:
+
+1) as a script
+$ ruby gene_painter.rb
+
+2) as a program
+$ ./gene_painter.rb
+GenePainter assumes your ruby interpreter to be located at /usr/local/bin/ruby
+To meet your local requirements, please edit the Shebang (first line of gene_painter.rb) and change the specified path to the correct one.
+
+Example: 
+Ruby interpreter located at /usr/bin/ruby
+Shebang: #!/usr/bin/ruby
+
+
+Usage
+-----
+$ ruby gene_painter.rb -i <alignment> -p <yaml-files> [<options>]
+
+Options
+-------
+
+***gene_painter.rb: align genes and put the structure figures into a file***
+***Version: 1.0.0***
+usage: ruby gene_painter.rb -i <alignment> -p <yaml-files> [<options>]
+Alignment:
+                              Path to alignment file. Fasta format needed.
+YAML-Files:
+                              Path to folder containing YAML files.
+Options:
+-o <project_name>             Base name of the output file(s) (default: 'genepainter')
+-a                            Output the alignment file with additional lines containing intron phases
+-n                            Mark introns by intron phase instead of the vertical bar "|"
+-phylo                        For phylogenetic analysis: Mark exons and introns by "0" and "1", respectively. Save as FASTA
+-s                            Mark non introns by " " instead of "-"
+-svg width height [Specifics] Create an SVG-file of size <width> x <height>
+     Specifics:               Use the additional parameter "extended", "normal" (default), or "reduced" to create the svg
+                 extended     Use this parameter to create a more detailed svg
+                 normal       Use this parameter to create the normal svg
+                 reduced      Use this parameter to create a svg focused on common introns
+-start X                      Alignment position to start (default: position 1)
+-stop Y                       Alignment position to stop (default: last position)
+-pdb file.pdb [chain]         Two scripts for execution in PyMol will be provided. In color_exons.py the
+                              consensus exons are colored and in color_splicesites.py the splice junctions
+                              of the consensus exons are marked for <chain> (default: chain A)
+-pdb_prot prot_name           Use protein <prot_name> as reference for alignment with the pdb sequence
+                              Default: First protein in <alignment>
+-f                            Force alignment between pdb and first protein sequence of the MSA or protein <prot_name> (if specified)
+                              This ignores the default that intron positions will only be mapped if the alignment score > 70%
+-consensus value              Color only intron positions conserved in <value> percent of all genes (default: 80%)
+-ref_prot_struct              Color only the intron positions occurring in the gene of the reference protein.
+                              May be combined with "-consensus"
+-penalize_endgaps             Penalize gaps at the end of the alignment (behaves like the standard Needleman-Wunsch algorithm)
+                              Default: gaps at the end of the alignment are not penalized
+
+
+Examples
+--------
+$ ruby gene_painter.rb -i test_data/coronin_alignment.fas -o coronin -p test_data/coronin_genes/ -svg 1000 500 extended \
+-pdb test_data/2AQ5.pdb -pdb_prot HsCoro1A
+$ ruby gene_painter.rb -i test_data/coronin_alignment.fas -o coronin -p test_data/coronin_genes/ -svg 1000 500 reduced
+
+
+Input
+-----
+Gene structures: in yaml-format as obtained by WebScipio. Please visit http://www.webscipio.org/help/scipio#description for further information about this format.
+Alignment: fasta formatted multiple sequence alignment. The fasta header must not contain any blanks or special characters, as they must be exactly identical to the filenames of corresponding YAML files.
+
+
+AUTHORS
+-------
+Björn Hammesfahr, Florian Odronitz, Stefanie Mühlhausen, Stephan Waack, Martin Kollmar
+
+
+HOW TO CITE
+-----------
+Björn Hammesfahr †, Florian Odronitz †, Stefanie Mühlhausen, Stephan Waack & Martin Kollmar (2013) 
+GenePainter: a fast tool for aligning gene structures of eukaryotic protein families, visualizing the alignments and mapping gene structures onto protein structures. BMC Bioinformatics 14, 77.
+
+
+CONTACT
+-------
+Dr. Martin Kollmar
+Department of NMR-based Structural Biology
+Group Systems Biology of Motor Proteins
+Am Faßberg 11
+37-77 Göttingen
+
+
+HOMEPAGE
+--------
+http://www.motorprotein.de/genepainter.html
+
+
+LICENCE
+-------
+GenePainter can be downloaded and used under a GNU General Public License.
+Any restrictions to use by non-academics: Using GenePainter by non-academics requires permission.
