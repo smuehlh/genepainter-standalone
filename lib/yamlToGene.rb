@@ -54,7 +54,7 @@ class YamlToGene
 			@gene.exons << exon_obj
 		end
 
-		# introns does also include all uncertain_introns!
+		# method "introns" returns all (complete) introns and all uncertain introns!
 		introns.each do |intron|
 			pos, phase = intron_phase_and_position_in_protein(intron["nucl_start"])
 			# TODO

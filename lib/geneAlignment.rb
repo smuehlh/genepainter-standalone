@@ -1,30 +1,25 @@
+# aligns gene objecs
 class GeneAlignment
-	# aligns gene objecs
+
 	attr_reader :aligned_genes
+
+	# class variables are shared by subclass Statistics
+	@@exon_placeholder = "-"
+	@@intron_placeholder = nil # defaults to the intron phase
+	Max_length_gene_name = 20 # also inherited, but a constant
+	Struct_str = "_structure"
 
 	def initialize(genes)
 		@aligned_genes = detect_conserved_introns(genes)
 	end
 
-	# the core of this project:
 	# find all introns with same phase and position
 	def detect_conserved_introns(genes)
-
-		# collect all genes (well, only the index of this gene in "genes"-Array) in which a introns with its phase occurs
-		@all_conserved_introns_with_phase = {} # value: gene; key: intron+phase
-		genes.each_with_index do |gene, ind|
-			all_introns_with_phase = gene.get_all_introns_with_phase
-			all_introns_with_phase.each do |pos_with_phase| 
-				( @all_conserved_introns_with_phase[pos_with_phase] ||= [] ) << ind
-			end
-		end
-
-		@all_conserved_introns_with_phase.each do |pos_phase, gene_indices|
-			if gene_indices.size > 1 then
-				gene_indices.each do |ind|
-					requested_intron = genes[ind].get_intron_by_alignmentpos_and_phase(pos_phase)
-					requested_intron.is_conserved = true
-				end
+		# compare introns of every gene with introns of every other genes to find duplicates
+		genes.combination(2) do |gene1, gene2|
+			common_introns = gene1.common_introns_of_this_and_other_gene(gene2)
+			common_introns.each do |intron|
+				intron.is_conserved = true
 			end
 		end
 
@@ -32,69 +27,173 @@ class GeneAlignment
 		return genes
 	end
 
+	# align genestructures by plotting them onto the MSA and reducing the gene structures to common gaps
+	# output format: array of strings, containing concatenated gene name and reduced exon intron pattern
+	# exons = "-", introns = phase
+	def convert_to_exon_intron_pattern
+		# collect gene names and the exon_intron_patterns
+		names_and_patterns = Array.new(@aligned_genes.size) # genename and exon-intron pattern
+		@aligned_genes.each_with_index do |gene, ind|
+			name = (">" << gene.name).ljust(Max_length_gene_name)
+			exon_intron_pattern = gene.plot_intron_phases_onto_aligned_seq(@@exon_placeholder, @@intron_placeholder)
+			names_and_patterns[ind] = [name, exon_intron_pattern].join("")
+		end
+
+		# remove common gaps from exon_intron_patterns
+		names_and_reduced_patterns = Sequence.remove_common_gaps(names_and_patterns, 
+			false,  # false: input is not a sequence alignment
+			Max_length_gene_name, @@exon_placeholder)
+
+		return names_and_reduced_patterns
+	end
+
 	def export_as_alignment_with_introns
 		output = []
 		@aligned_genes.each do |gene|
-			output << Sequence.convert_strings_to_fasta(gene.name, gene.aligned_seq)
-			output << Sequence.convert_strings_to_fasta(gene.name + "_structure", 
+			output << Sequence.convert_strings_to_fasta(gene.name, gene.get_aligned_seq_within_range)
+			output << Sequence.convert_strings_to_fasta(gene.name + Struct_str, 
 				gene.plot_intron_phases_onto_aligned_seq)
 		end
 
-		return output.join("\n")
+		return output
 	end
 
-	def export_as_plain_txt(exon_placeholder="-", intron_placeholder=nil)
-	# TODO
-	# can be faster by constructing output in look through @aligned_genes
-	# than: add offset to Sequence.remove_common_gaps_from_gene_structurs(output, offset=20)
-		exon_intron_patterns = []
-		genenames = []
-		output = [] # genename and pattern merged into one string for every genename
-		@aligned_genes.each do |gene|
+	def export_as_plain_txt
+		output = convert_to_exon_intron_pattern
 
-			exon_intron_patterns << gene.plot_intron_phases_onto_aligned_seq
-			genenames << [">", gene.name.ljust(20)].join("")
-		end
-
-		reduced_exon_intron_patterns = Sequence.remove_common_gaps_from_gene_structurs(exon_intron_patterns)
-		
-		# interleave exon_intron_patterns with genenames
-		# convert exon_intron_pattern to desired placeholders
-		genenames.each_with_index do |gene, ind|
-			pattern = reduced_exon_intron_patterns[ind]
-			if exon_placeholder != "-" then
-				pattern = pattern.gsub("-", exon_placeholder)
-			end
-			if intron_placeholder then
-				pattern = pattern.gsub(/[0|1|2|?]/, intron_placeholder)
-			end
-			output << [gene,pattern].join("")
-		end
-
-		return output.join("\n")
+		return output
 	end
 
 	def export_as_binary_alignment
-		output = []
-		exon_intron_patterns = []
-		genenames = []
+		output = convert_to_exon_intron_pattern
 
-		@aligned_genes.each do |gene|
-			exon_intron_patterns << gene.plot_intron_phases_onto_aligned_seq
-			genenames << gene.name
-		end
-
-		reduced_exon_intron_patterns = Sequence.remove_common_gaps_from_gene_structurs(exon_intron_patterns)
-
-		genenames.each_with_index do |gene, ind|
-			pattern = reduced_exon_intron_patterns[ind]
-			pattern = pattern.gsub(/[0|1|2|?]/, '1')
-			pattern = pattern.gsub('-', '0')
-			output << Sequence.convert_strings_to_fasta(gene, pattern)
+		# convert into fasta-formatted string
+		converted_output = output.map do |name_and_pattern|
+			name, pattern = name_and_pattern[0..Max_length_gene_name-1], name_and_pattern[Max_length_gene_name..-1]
+			name_and_pattern = Sequence.convert_strings_to_fasta(name, pattern)
 		end
 		
-		return output.join("\n")
+		return converted_output
+	end
+
+	def export_as_svg(options)
+		total_height = options[:size][0]
+		total_width = options[:size][1]
+		height_per_gene = total_height.to_f / @aligned_genes.size
+		output = []
+		output << Helper::SvgPainter.header( total_width, total_height )
+
+		@aligned_genes.each_with_index do |gene, ind|
+			this_height = height_per_gene * ind
+			output << Helper::SvgPainter.text(5,this_height,gene.name.ljust(Max_length_gene_name))
+			output << Helper::SvgPainter.line(5,this_height,total_width,this_height,"purple")
+
+			# TODO jedes exon & intron zeichnen
+			# erstmal: eine linie fuer jedes gen
+			# output << Helper::SvgPainter.text (gene.name)
+		end
+		output << Helper::SvgPainter.footer
+debugger
+puts "hmm"
+		return output
 	end
 # might need a subclass for SVG output
 # svg: make gaps in exons distingishable from sequence in exons!
+# svg: make use of length stored in every exon and intron object
+# and also (for coloring the simple output): of the property: _is_conserved!!!
+
+	class Statistics
+
+		def initialize(names_and_patterns, is_alignment)
+# TODO binaere pattern, da geht addition & ist super schnell
+# output merged/conserved as fasta also
+			@gene_patterns = extract_exon_intron_patterns(names_and_patterns, is_alignment)
+			@intron_regex = intron_placeholder_to_regexp # string or regex
+			@n_introns_per_position = count_number_of_introns_per_pos_in_patterns
+		end
+
+		def intron_placeholder
+			GeneAlignment.class_variable_get(:@@intron_placeholder)
+		end
+		def exon_placeholder
+			GeneAlignment.class_variable_get(:@@exon_placeholder)
+		end
+
+		def intron_placeholder_to_regexp
+			if intron_placeholder then 
+				return Regexp.new( Regexp.escape( intron_placeholder ) ) # escaping is necessary because placeholder might be "|"
+			else
+				# placeholder = 'nil' actually means, that intron is represented as [0|1|2|?]
+				return Regexp.new( "[0|1|2|?]" )
+			end
+		end
+
+		def extract_exon_intron_patterns(input, is_alignment)
+			if is_alignment then
+				names, seqs_and_patterns = Sequence.convert_fasta_array_back_to_arrays(input)
+				if exon_placeholder == "0" && intron_placeholder == "1" then
+					# gene structure in binary fasta format
+					return seqs_and_patterns
+				else
+					# alignment with gene structures
+					# return only gene structures
+					return seqs_and_patterns.select.with_index { |seq, ind| seq if names[ind].include?(Struct_str) }
+				end
+			else
+				return input.collect{|line| line[Max_length_gene_name..-1] }
+			end
+		end
+
+		def count_number_of_introns_per_pos_in_patterns
+			counts = Hash.new(0) # keys: position in gene_patterns, values: number of occurances
+			@gene_patterns.each do |pattern|
+				inds = Helper.find_each_index(pattern,@intron_regex)
+				inds.each do |ind|
+					counts[ind] += 1
+				end
+			end
+			return counts
+		end
+
+		def get_consensus_exon_intron_pattern(pct_value, is_alignment=false)
+			consensus_pattern = get_an_empty_pattern
+			cons_name = get_name_for_new_pattern("Consensus")
+			n_genes = @gene_patterns.size
+			@n_introns_per_position.each do |pos, num|
+				# check if the intron occurs often enough
+				if num.to_f/n_genes >= pct_value then
+					consensus_pattern[pos] = intron_placeholder
+				end
+			end
+			if is_alignment then
+				return Sequence.convert_strings_to_fasta(cons_name, consensus_pattern)
+			else
+				return (cons_name << consensus_pattern)
+			end
+		end
+
+		def get_merged_exon_intron_pattern(is_alignment=false)
+			merged_pattern = get_an_empty_pattern
+			merged_name = get_name_for_new_pattern("Merged")
+			@n_introns_per_position.keys.each do |pos|
+				merged_pattern[pos] = intron_placeholder
+			end
+			if is_alignment then
+				return Sequence.convert_strings_to_fasta(merged_name, merged_pattern)
+			else
+				return (merged_name << merged_pattern)
+			end
+		end
+
+		def get_an_empty_pattern
+			pattern_length = @gene_patterns[0].size
+			new_pattern = exon_placeholder * pattern_length # 'empty' pattern, only exons
+			return new_pattern
+		end
+
+		def get_name_for_new_pattern(str)
+			return str.ljust(Max_length_gene_name)
+		end
+
+	end
 end

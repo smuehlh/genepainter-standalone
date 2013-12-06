@@ -9,7 +9,9 @@ end
 require 'ruby-debug'
 Dir[File.join(File.dirname(__FILE__), 'lib', '*.rb')].each {|file| require File.absolute_path(file) }
 
+### parse command line arguments
 args = ARGV.map {|ele| ele.dup}
+OptParser.backwards_compability_check(args)
 options = OptParser.parse(args)
 
 ### open log file and specify its automatic closure at_exit
@@ -22,26 +24,8 @@ fh_log.puts "Date: #{Time.now}"
 ### read in data, use only intersect of alingment and gene structures
 print "Read in alignment and genes ..."
 ## alignment
-aligned_seqs_names, aligned_seqs = [], []
-IO.foreach(options[:path_to_alignment]) do |line|
-	line.chomp!
-	if line[0] == ">" then
-		# fasta header
-		aligned_seqs_names << line[1..-1] 
-	else
-		# fasta sequence
+aligned_seqs_names, aligned_seqs = Sequence.read_in_alignment(options[:path_to_alignment])
 
-		n_seqs = aligned_seqs_names.size
-		# a new sequence or another line for the last sequence?
-		if aligned_seqs.size < n_seqs then
-			# new sequence
-			aligned_seqs << line
-		else
-			# add to last sequence
-			aligned_seqs[n_seqs - 1] += line # -1: convert number of elements n_seqs to an index
-		end
-	end
-end
 ## genes
 gene_names = [] # a list of all gene names
 Dir.glob( File.join(options[:path_to_genestruct], "*.*") ) do |file|
@@ -53,7 +37,12 @@ end
 # initialize 
 gene_objects = [] # a list of all gene objects
 common_names = aligned_seqs_names & gene_names
-common_names.each do |gene_name|
+
+# make sure all _needed_ aligned sequences are of same length
+common_aligned_seqs = Sequence.ensure_seqs_have_same_length(aligned_seqs, aligned_seqs_names, common_names)
+
+# merge gene structure and sequence into a gene object
+common_names.each_with_index do |gene_name, ind|
 
 	# find gene structure file with belongs to this gene
 	matching_files = Dir.glob( File.join(options[:path_to_genestruct], "#{gene_name}.*") ) 
@@ -64,7 +53,6 @@ common_names.each do |gene_name|
 	else
 		file = matching_files[0]
 		f_extension = File.extname(file)
-		aligned_seq_ind = aligned_seqs_names.index(gene_name)
 	end
 
 	# read in file and parse gene structure
@@ -83,10 +71,10 @@ common_names.each do |gene_name|
 		Helper.abort("Cannot parse gene structure. Unknown file type #{file}.")
 	end
 
-	# create a gene object with this structure
-	gene_obj = data_obj.to_gene # method to_gene returns a gene object
-	gene_obj.aligned_seq = aligned_seqs[aligned_seq_ind] # ... and aligned sequence
-
+	# create a gene object with this structure and sequence
+	gene_obj = data_obj.to_gene # method to_gene returns a gene object containing the structure
+	gene_obj.add_aligned_seq(common_aligned_seqs[ind]) # ... and aligned sequence
+	gene_obj.add_alignment_range(options[:range] || []) # ... and range(s) of interesting parts [numbers match to the aligned sequence]
 	gene_objects << gene_obj
 end
 
@@ -102,45 +90,77 @@ gene_alignment_obj = GeneAlignment.new(gene_objects)
 puts " done."
 
 ### prepare output 
-print "Prepare output ... "
-output_str = ""
+puts "Prepare output ... "
+output_arr = []
 f_out_extension = ""
 
-case options[:output_format]
-when "alignment_with_intron_phases"
-	output_str = gene_alignment_obj.export_as_alignment_with_introns
-	f_out_extension = ".fas"
-
-when "txt_simple", "txt_intron_phases", "txt_only_introns"
-
-	# how to display exons and introns?
-	# possible combinations:
-	# txt_simple: exon="-",intron="|"
-	# txt_intron_phases: exon="-",intron=["0"|"1"|"2"]
-	# txt_only_introns: exon=" ",intron="|"
-	exon_representation_in_output = "-" # gap symbol
-	intron_representation_in_output = nil # intron phases 
-	case options[:output_format]
+### ... for every requested output format
+options[:output_format].each do |format|
+	case format
+	when "alignment_with_intron_phases"
+		output_arr = gene_alignment_obj.export_as_alignment_with_introns
+		f_out_extension = ".fas"
+		is_alignment = true
 	when "txt_simple"
-		intron_representation_in_output = "|"
+		GeneAlignment.class_variable_set(:@@exon_placeholder, "-")
+		GeneAlignment.class_variable_set(:@@intron_placeholder, "|")
+		output_arr = gene_alignment_obj.export_as_plain_txt
+		f_out_extension = "-std.txt"
+	when "txt_intron_phases"
+		GeneAlignment.class_variable_set(:@@exon_placeholder, "-")
+		GeneAlignment.class_variable_set(:@@intron_placeholder, nil )
+		output_arr = gene_alignment_obj.export_as_plain_txt
+		f_out_extension = "-intron-phase.txt"
 	when "txt_only_introns"
-		exon_representation_in_output = " "
-		intron_representation_in_output = "|"
+		GeneAlignment.class_variable_set(:@@exon_placeholder, " ")
+		GeneAlignment.class_variable_set(:@@intron_placeholder, "|")
+		output_arr = gene_alignment_obj.export_as_plain_txt
+		f_out_extension = "-spaces.txt"
+	when "txt_phylo"
+		GeneAlignment.class_variable_set(:@@exon_placeholder, "0")
+		GeneAlignment.class_variable_set(:@@intron_placeholder, "1")
+		output_arr = gene_alignment_obj.export_as_binary_alignment
+		f_out_extension = "-phylo.fas"
+		is_alignment = true
+	when "svg"
+		gene_alignment_obj.export_as_svg( options[:svg_options] )
+		f_out_extension = ".svg"
+	else
+		# this should never be executed, but it does not harm anyway
+		puts "---"
+		puts "Unknown output option. Provide plain text output instead."
+		GeneAlignment.class_variable_set(:@@exon_placeholder, "-")
+		GeneAlignment.class_variable_set(:@@intron_placeholder, "|")
+		f_out_extension = "-std.txt"
+		output_arr = gene_alignment_obj.export_as_plain_txt
 	end
-	f_out_extension = ".txt"
-	output_str = gene_alignment_obj.export_as_plain_txt(exon_representation_in_output, intron_representation_in_output)
+			
+	print "\t"
+	### add merged/consensus profile statistics 
+	if options[:merge] then
+		print "calculating merged profile ... "
+		stats_obj = GeneAlignment::Statistics.new(output_arr, is_alignment || false )
+		merged_pattern = stats_obj.get_merged_exon_intron_pattern(is_alignment || false )
+		output_arr << merged_pattern
+	end
+	if options[:consensus] then
+		print "calculating consensus profile ... "
+		stats_obj = GeneAlignment::Statistics.new(output_arr, is_alignment || false )
+		consensus_pattern = stats_obj.get_consensus_exon_intron_pattern(options[:consensus], is_alignment || false )
+		output_arr << consensus_pattern
+	end
 
-when "txt_phylo"
-	output_str = gene_alignment_obj.export_as_binary_alignment
-	f_out_extension = ".fas"
-else
-	puts ""
-	puts "*** No!"
+	### output the output :-)
+	f_out = options[:path_to_output] + f_out_extension
+	print "writing output to #{f_out} ... "
+	IO.write( f_out, output_arr.join("\n"), :mode => "w" )
+	puts "done."
+
 end
-		
-### output the output :-)
-print "writing output ... "
-IO.write( options[:path_to_output] + f_out_extension, output_str, :mode => "w" )
-puts "done."
 
+
+
+# TODO
+# replace buggy Needleman-Wunsch algo by a working one
+# inspect the code from marcel: /fab8/mahe/work/pyscipio/src/_fastnw (but there, one of the strings is DNA, the other protein and frameshifts are considered: in trace back, rucksprung-adresse is also stored)
 
