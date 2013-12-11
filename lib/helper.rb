@@ -51,45 +51,20 @@ module Helper
 		end
 		return inds
 	end
+end
 
-	module SvgPainter
-		extend self
-		def line(x1, y1, x2, y2, color)
-			return "<line x1=\"#{x1}\" "\
-				"y1=\"#{y1}\" "\
-				"x2=\"#{x2}\" "\
-				"y2=\"#{y2}\" "\
-				"stroke=\"#{color}\" "\
-				"/>"
-		end
-
-		def box(x, y, width, height, color)
-			return "<rect x=\"#{x}\" "\
-				"y=\"#{y}\" "\
-				"width=\"#{width}\" "\
-				"height=\"#{height}\" "\
-				"fill=\"#{color}\" "\
-				"/>"
-		end
-
-		def text(x,y,txt)
-			return "<text x=\"#{x}\" "\
-				"y=\"#{y}\"> "\
-				"#{txt} "\
-				"</text>"
-		end
-
-		def header(width=1000,height=500)
-			return "<svg version=\"1.1\" "\
-				"baseProfile=\"full\" "\
-				"width=\"#{width}\" "\
-				"height=\"#{height}\" "\
-				"viewBox=\"0 0 #{width.to_f/10} #{height.to_f/10}\" "\
-				"xmlns=\"http://www.w3.org/2000/svg\">"
-		end
-		def footer
-			return "</svg>"
+class Array
+	# multiplies each element in array with x
+	# recursively, if array elements are arrays itself
+	def multiply_by(x)
+		collect do |v|
+			case(v)
+			when Array
+				# if item in array is an array itself, apply same method on it
+				v.multiply_by(x)
+			else
+				v * x
+			end
 		end
 	end
-
 end

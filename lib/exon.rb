@@ -7,25 +7,17 @@ class Exon
 
 		# TODO
 		# also needs: pos_sequence_shifts = [] ?
-		# also needs: n_amino_acids = endpos-startpos ?
 	end
 
 	def get_start_pos_in_alignment(aligned_seq)
-		return Sequence::sequence_pos2alignment_pos(@start_pos_in_protein_seq, aligned_seq)
+		return Sequence.sequence_pos2alignment_pos(@start_pos_in_protein_seq, aligned_seq)
 	end
 
 	def get_end_pos_in_alignment(aligned_seq)
-		return Sequence::sequence_pos2alignment_pos(@end_pos_in_protein_seq, aligned_seq)
+		return Sequence.sequence_pos2alignment_pos(@end_pos_in_protein_seq, aligned_seq)
 	end
 
-	def get_all_gap_pos_in_alignment(aligned_seq)
-		gap_symbol = "-" 
-		pos = []
-		i = -1 # offset in aligned_seq for search for occurance
-		while i = aligned_seq.index(gap_symbol, i+1)
-			pos << i
-		end
-		return pos
+	def aligned_seq_length(aligned_seq)
+		return get_end_pos_in_alignment(aligned_seq) - get_start_pos_in_alignment(aligned_seq)
 	end
-
 end

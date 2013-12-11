@@ -123,6 +123,8 @@ options[:output_format].each do |format|
 		f_out_extension = "-phylo.fas"
 		is_alignment = true
 	when "svg"
+		GeneAlignment.class_variable_set(:@@exon_placeholder, "-")
+		GeneAlignment.class_variable_set(:@@intron_placeholder, "|")
 		gene_alignment_obj.export_as_svg( options[:svg_options] )
 		f_out_extension = ".svg"
 	else

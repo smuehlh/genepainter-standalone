@@ -77,26 +77,52 @@ class GeneAlignment
 	end
 
 	def export_as_svg(options)
-		total_height = options[:size][0]
-		total_width = options[:size][1]
-		height_per_gene = total_height.to_f / @aligned_genes.size
 		output = []
-		output << Helper::SvgPainter.header( total_width, total_height )
+		n_genes = @aligned_genes.size
 
+		## parameters for drawing
+		params = Svg.parameters
+		size_per_gene = Svg.size_per_gene(n_genes) # height of each gene, including the space between genes
+		height_per_gene_feature = Svg.height_of_gene_feature(size_per_gene) # size of boxes representing exons and introns
+
+		## collecing data
+		names = []
+		genes = []
+		y_pos = []
+
+		longest_aligned_seq = 0 # in nucleotides, counted per gene
+		longest_intronic_seq = 0 # in nucleotides, counted per gene
 		@aligned_genes.each_with_index do |gene, ind|
-			this_height = height_per_gene * ind
-			output << Helper::SvgPainter.text(5,this_height,gene.name.ljust(Max_length_gene_name))
-			output << Helper::SvgPainter.line(5,this_height,total_width,this_height,"purple")
 
-			# TODO jedes exon & intron zeichnen
-			# erstmal: eine linie fuer jedes gen
-			# output << Helper::SvgPainter.text (gene.name)
+			this_length_introns = gene.length_of_introns_in_nt
+			this_length_aligned_exons = gene.aligned_seq.size * 3
+
+			if this_length_introns > longest_intronic_seq then
+				longest_intronic_seq = this_length_introns
+			end
+			if this_length_aligned_exons > longest_aligned_seq then
+				longest_aligned_seq = this_length_aligned_exons
+			end
+
+			genes << {exons: gene.get_all_exons_with_length, introns: gene.get_all_introns_with_length}
+			names << gene.name.ljust(Max_length_gene_name)
+			y_pos << (ind * size_per_gene)
 		end
-		output << Helper::SvgPainter.footer
-debugger
-puts "hmm"
+# TODO
+# same color for conserved introns
+# via stats: assign color based on pos! and than count introns before to know which intron gets which color
+		## convert data to picture
+		scaled_genes = Svg.scale_genes_to_canvas(genes, longest_aligned_seq, longest_intronic_seq)
+
+		output << Svg::Painter.header(options[:size][:width], options[:size][:height])
+		output << Svg.print_names_and_genes(names, scaled_genes, y_pos, options[:reduced]) # TODO sort & color genes here
+		output << Svg::Painter.footer
+
 		return output
 	end
+
+
+
 # might need a subclass for SVG output
 # svg: make gaps in exons distingishable from sequence in exons!
 # svg: make use of length stored in every exon and intron object

@@ -27,29 +27,30 @@ class YamlToGene
 	end
 
 
-	# this method is not needed, 
-	# as the number of exons and introns is defined by their order
-	def number_exons_and_introns
-		exon_number = 0
+	# # this method is not needed, 
+	# # as the number of exons and introns is defined by their order
+	# def number_exons_and_introns
+	# 	exon_number = 0
 
-		@contigs.each_with_index do |contig, contig_index|
-			contig["number"] = contig_index.to_i + 1
-			contig["matchings"].each do |matching|
-				if matching["type"] == "exon" then
-					exon_number += 1
-					matching["number"] = exon_number.to_i
-				elsif matching["type"] == "intron" ||  matching["type"] == "intron?" then
-					matching["number"] = exon_number.to_i
-				end
-				matching["contig"] = contig_index.to_i + 1
-			end
-		end
-	end
+	# 	@contigs.each_with_index do |contig, contig_index|
+	# 		contig["number"] = contig_index.to_i + 1
+	# 		contig["matchings"].each do |matching|
+	# 			if matching["type"] == "exon" then
+	# 				exon_number += 1
+	# 				matching["number"] = exon_number.to_i
+	# 			elsif matching["type"] == "intron" ||  matching["type"] == "intron?" then
+	# 				matching["number"] = exon_number.to_i
+	# 			end
+	# 			matching["contig"] = contig_index.to_i + 1
+	# 		end
+	# 	end
+	# end
 
 	def to_gene
 		# a gene object needs exons and introns (and the aligned sequence, which is added somewhere else)
-
-		exons.each do |exon|
+		
+		# method exons_original returns only exons, no alternative transkripts
+		exons_original.each do |exon|
 			exon_obj = Exon.new(exon["prot_start"], exon["prot_end"])
 			@gene.exons << exon_obj
 		end

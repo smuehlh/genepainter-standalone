@@ -36,6 +36,24 @@ class Gene
 		reduce_str_to_range(@aligned_seq)
 	end
 
+	def get_all_gap_pos_in_alignment(aligned_seq)
+		return Helper.find_each_index(aligned_seq, "-")
+	end
+
+	def get_all_exons_with_length
+		all_pos_with_length = @exons.collect do |exon|
+			[exon.get_start_pos_in_alignment(@aligned_seq), exon.aligned_seq_length(@aligned_seq) ]
+		end
+		return all_pos_with_length
+	end
+
+	def get_all_introns_with_length
+		all_pos_with_length = @introns.collect do |intron|
+			[intron.pos_last_aa_in_aligned_seq_before_intron, intron.n_nucleotides]
+		end
+		return all_pos_with_length
+	end
+
 	def get_all_introns_with_phase
 		all_pos_with_phase = @introns.collect do |intron|
 			intron.get_alignmentpos_and_phase
@@ -51,7 +69,19 @@ class Gene
 	end
 
 	def get_intron_by_alignmentpos_and_phase(alignment_pos_phase)
-		return @introns.find{ |i| i.get_alignmentpos_and_phase(@aligned_seq) == alignment_pos_phase }
+		@introns.find{ |i| i.get_alignmentpos_and_phase(@aligned_seq) == alignment_pos_phase }
+	end
+
+	def length_of_exons_in_aa
+		sum = 0
+		@exons.each { |exon| sum += (exon.end_pos_in_protein_seq - exon.start_pos_in_protein_seq) }
+		return sum.to_f
+	end
+
+	def length_of_introns_in_nt
+		sum = 0
+		@introns.each { |intron| sum += intron.n_nucleotides }
+		return sum.to_f
 	end
 
 	# a sequence of same length as "@aligned_seq" consisting of gaps and intron phases only

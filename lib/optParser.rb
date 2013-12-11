@@ -103,21 +103,22 @@ class OptParser
 
 			opts.separator ""
 			opts.separator "Graphical output format:"
-			svg_formats = ["normal", "reduced"]
 			opts.on("--svg H,W", Array,
 				"Drawn SVG of size heigth x width") do |list|
 				list = list.map(&:to_i)
 				if list.size != 2 || list.inject(:*) == 0 then
 					# number of args wrong or at least one is zero
-					Helper.abort "invalid argument: -- svg expected two numbers"
+					Helper.abort "Invalid argument: --svg expects two numbers"
 				end
 				options[:output_format] << "svg"
 				if options[:svg_options] then
-					options[:svg_options][:size] = list
+					options[:svg_options][:size][:heigth] = list[0]
+					options[:svg_options][:size][:width] = list[1]
 				else
-					options[:svg_options] = { size: list }
+					options[:svg_options] = { size: {heigth: list[0], width: list[1]} }
 				end
 			end
+			svg_formats = ["normal", "reduced"]
 			opts.on("--svg-format FORMAT", svg_formats,
 				"	FORMAT: #{svg_formats}",
 				"	'normal' draws details of aligned exons and introns [default]",
