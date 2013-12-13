@@ -76,14 +76,78 @@ class GeneAlignment
 		return converted_output
 	end
 
-	def export_as_svg(options)
+def export_as_svg(options)
+	# the general idea:
+	# need to find the longest intron at every position and expand the shorter
+	# and have a method of Svg for every type of variable, such that the Svg method does not need to know that much about the underlying structure!!!
+
+	genes_with_aligned_features = {}
+
+	@aligned_genes.combination(2) do |gene1, gene2|
+
+		## prepare new data structure for genes (if neccessary)
+		if ! genes_with_aligned_features[gene1.name] then
+			genes_with_aligned_features[gene1.name] = PrepareGeneForSvg.new_data_struct_for_gene(gene1)
+		end
+		if ! genes_with_aligned_features[gene2.name] then 
+			genes_with_aligned_features[gene2.name] = PrepareGeneForSvg.new_data_struct_for_gene(gene2)
+		end
+
+		## are introns common to both genes?
+		# common_introns contain introns of both genes
+		common_introns = gene1.common_introns_of_this_and_other_gene(gene2)
+		## no: nothing to do
+		## yes: iterate through every pair of common introns
+		common_introns.sort.each_slice(2) do |intron1, intron2|
+			# find out which intron belongs to which gene 
+			if gene1.introns.include?(intron1) then
+				gene_features_belonging_to_intron1 = genes_with_aligned_features[gene1.name]
+				gene_features_belonging_to_intron2 = genes_with_aligned_features[gene2.name]
+				ind_intron1 = gene1.introns.index(intron1)
+				ind_intron2 = gene2.introns.index(intron2)
+			else
+				gene_features_belonging_to_intron1 = genes_with_aligned_features[gene2.name]
+				gene_features_belonging_to_intron2 = genes_with_aligned_features[gene1.name]
+				ind_intron1 = gene2.introns.index(intron1)
+				ind_intron2 = gene1.introns.index(intron2)
+			end
+
+			## 	compare length of g1 intron and g2 intron
+			## the gene with the shorter intron needs some more offset to keep consequtive features aligned
+			length_diff_intron1_intron2 = intron1.n_nucleotides - intron2.n_nucleotides
+			if length_diff_intron1_intron2 < 0 then
+				# intron 1 is shorter
+				PrepareGeneForSvg.adding_offset(gene_features_belonging_to_intron1, length_diff_intron1_intron2, ind_intron1)
+			else
+				# intron 2 is shorter
+				PrepareGeneForSvg.adding_offset(gene_features_belonging_to_intron2, length_diff_intron1_intron2, ind_intron2)
+			end
+		end
+
+	end
+debugger
+puts "next: scaling aligned features to meet ratio exons & introns and the total width"
+	# TODO
+	# add offsets to positions
+	# scale features (maybe collect some information for scaling during the processing, like the max lenght of exons and introns found in any gene)
+	# draw featrures 
+	# -(rewrite Svg: make one method to draw boxes and instruct it with the size and the color)
+	# -every type of feature should be printed in one rush (at moment, its more like every gene is printed in one rush, which require lots of logic about feature in Svg)
+
+	# idea for 'reduced': replace intron length by some fixed number!
+
+	# idea for drawing: start with large box (balken im hintergrund) for intron-extension
+	# plot boxes for features (exons, gaps and real introns) onto this 
+end
+
+	def export_as_svg_alter_ansatz(options)
 		output = []
 		n_genes = @aligned_genes.size
 
 		## parameters for drawing
-		params = Svg.parameters
+		# params = Svg.parameters
 		size_per_gene = Svg.size_per_gene(n_genes) # height of each gene, including the space between genes
-		height_per_gene_feature = Svg.height_of_gene_feature(size_per_gene) # size of boxes representing exons and introns
+		# height_per_gene_feature = Svg.height_of_gene_feature(size_per_gene) # size of boxes representing exons and introns
 
 		## collecing data
 		names = []
@@ -104,8 +168,12 @@ class GeneAlignment
 				longest_aligned_seq = this_length_aligned_exons
 			end
 
-			genes << {exons: gene.get_all_exons_with_length, introns: gene.get_all_introns_with_length}
-			names << gene.name.ljust(Max_length_gene_name)
+			genes << {
+				exons: gene.get_all_exons_with_length, 
+				gaps: gene.get_all_gaps_with_length,
+				introns: gene.get_all_introns_with_length
+			}
+			names << gene.name[0..Max_length_gene_name]
 			y_pos << (ind * size_per_gene)
 		end
 # TODO
@@ -115,9 +183,9 @@ class GeneAlignment
 		scaled_genes = Svg.scale_genes_to_canvas(genes, longest_aligned_seq, longest_intronic_seq)
 
 		output << Svg::Painter.header(options[:size][:width], options[:size][:height])
-		output << Svg.print_names_and_genes(names, scaled_genes, y_pos, options[:reduced]) # TODO sort & color genes here
+		output << Svg.print_names_and_genes(names, scaled_genes, y_pos, options[:reduced]) 
 		output << Svg::Painter.footer
-
+debugger
 		return output
 	end
 
@@ -127,6 +195,29 @@ class GeneAlignment
 # svg: make gaps in exons distingishable from sequence in exons!
 # svg: make use of length stored in every exon and intron object
 # and also (for coloring the simple output): of the property: _is_conserved!!!
+
+	module PrepareGeneForSvg
+		def self.new_data_struct_for_gene(gene)
+			# each value is array of arrays (for each feature: position in alignment, offset, length)
+			return {
+				exons: expand_array_for_offset(gene.get_all_exons_with_length(true)), # true: convert amino acid to nucleotide count
+				exon_gaps: expand_array_for_offset(gene.get_all_gaps_with_length(true)), # true: convert aa to nt count 
+				introns: expand_array_for_offset(gene.get_all_introns_with_length)#,
+				# intron_gaps: []
+			}
+		end
+		def self.expand_array_for_offset(array)
+			array.map! do |ele|
+				ele = [ele[0],0,ele[1]]
+			end	
+		end
+		def self.adding_offset(struct, offset, ind)
+			struct.each do |key, val|
+				# add offset to every value consecutive to ind
+				val[ind+1..-1].map!{ |arr| arr[1] += offset }
+			end
+		end
+	end
 
 	class Statistics
 

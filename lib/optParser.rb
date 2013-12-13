@@ -104,7 +104,7 @@ class OptParser
 			opts.separator ""
 			opts.separator "Graphical output format:"
 			opts.on("--svg H,W", Array,
-				"Drawn SVG of size heigth x width") do |list|
+				"Drawn SVG of size height x width") do |list|
 				list = list.map(&:to_i)
 				if list.size != 2 || list.inject(:*) == 0 then
 					# number of args wrong or at least one is zero
@@ -112,10 +112,10 @@ class OptParser
 				end
 				options[:output_format] << "svg"
 				if options[:svg_options] then
-					options[:svg_options][:size][:heigth] = list[0]
+					options[:svg_options][:size][:height] = list[0]
 					options[:svg_options][:size][:width] = list[1]
 				else
-					options[:svg_options] = { size: {heigth: list[0], width: list[1]} }
+					options[:svg_options] = { size: {height: list[0], width: list[1]} }
 				end
 			end
 			svg_formats = ["normal", "reduced"]

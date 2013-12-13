@@ -24,6 +24,12 @@ class Intron
 	end
 	# _end_ make two introns comparable
 
+	# make two introns sortable
+	def <=>(other_intron)
+		[@pos_last_aa_in_aligned_seq_before_intron,@phase] <=> [other_intron.pos_last_aa_in_aligned_seq_before_intron, other_intron.phase] 
+	end
+	# _end_ make to introns sortable
+
 	def validate_intron_phase(phase)
 		phase = phase.to_s
 		valid_phases = ["0", "1", "2"] # these phases are resonable

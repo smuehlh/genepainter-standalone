@@ -36,20 +36,52 @@ class Gene
 		reduce_str_to_range(@aligned_seq)
 	end
 
-	def get_all_gap_pos_in_alignment(aligned_seq)
-		return Helper.find_each_index(aligned_seq, "-")
+	def get_all_gap_pos
+		Helper.find_each_index(@aligned_seq, "-")
 	end
 
-	def get_all_exons_with_length
-		all_pos_with_length = @exons.collect do |exon|
-			[exon.get_start_pos_in_alignment(@aligned_seq), exon.aligned_seq_length(@aligned_seq) ]
+	def get_all_gaps_with_length(is_convert_to_nt_length=false)
+		all_gaps = get_all_gap_pos
+		if is_convert_to_nt_length then
+			length_one_gap = 3
+		else
+			length_one_gap = 1
+		end
+
+		# initialize: the very first pos is a gap of minimum length_one_gap
+		all_pos_with_length = [[all_gaps[0],length_one_gap]]
+		all_gaps.each_cons(2) do |x,y|
+			if y == x+length_one_gap then
+				# same gap, make it a bit longer
+				all_pos_with_length[-1][1] += length_one_gap
+			else
+				# new gap
+				all_pos_with_length << [y*length_one_gap,length_one_gap]
+			end
 		end
 		return all_pos_with_length
 	end
 
-	def get_all_introns_with_length
+	def get_all_exons_with_length(is_convert_to_nt_length=false)
+		if is_convert_to_nt_length then
+			length_one_pos = 3
+		else
+			length_one_pos = 1
+		end		
+		all_pos_with_length = @exons.collect do |exon|
+			[exon.get_start_pos_in_alignment(@aligned_seq) * length_one_pos , exon.aligned_seq_length(@aligned_seq) * length_one_pos ]
+		end
+		return all_pos_with_length
+	end
+
+	def get_all_introns_with_length(is_convert_to_nt_length=false)
+		if is_convert_to_nt_length then
+			length_one_pos = 3
+		else
+			length_one_pos = 1
+		end	
 		all_pos_with_length = @introns.collect do |intron|
-			[intron.pos_last_aa_in_aligned_seq_before_intron, intron.n_nucleotides]
+			[intron.pos_last_aa_in_aligned_seq_before_intron * length_one_pos, intron.n_nucleotides]
 		end
 		return all_pos_with_length
 	end
