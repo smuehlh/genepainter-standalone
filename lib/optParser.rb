@@ -38,21 +38,6 @@ class OptParser
 		# 	"svg_focus_on_common_introns" # svg, conserved introns drawn in same colour
 		# ]
 
-# the old options
-# -pdb file.pdb [chain]         Two scripts for execution in PyMol will be provided. In color_exons.py the
-#                               consensus exons are colored and in color_splicesites.py the splice junctions
-#                               of the consensus exons are marked for <chain> (default: chain A)
-# -pdb_prot prot_name           Use protein <prot_name> as reference for alignment with the pdb sequence
-#                               Default: First protein in <alignment>
-# -f                            Force alignment between pdb and first protein sequence of the MSA or protein <prot_name> (if specified)
-#                               This ignores the default that intron positions will only be mapped if the alignment score > 70%
-# -consensus value              Color only intron positions conserved in <value> percent of all genes (default: 80%)
-# -ref_prot_struct              Color only the intron positions occurring in the gene of the reference protein.
-#                               May be combined with "-consensus"
-# -penalize_endgaps             Penalize gaps at the end of the alignment (behaves like the standard Needleman-Wunsch algorithm)
-#                               Default: gaps at the end of the alignment are not penalized'
-
-
 		opt_parser = OptionParser.new do |opts|
 
 			opts.banner = "\nGenePainter v.1.2 maps gene structures onto multiple sequence alignments"
@@ -111,12 +96,8 @@ class OptParser
 					Helper.abort "Invalid argument: --svg expects two numbers"
 				end
 				options[:output_format] << "svg"
-				if options[:svg_options] then
-					options[:svg_options][:size][:height] = list[0]
-					options[:svg_options][:size][:width] = list[1]
-				else
-					options[:svg_options] = { size: {height: list[0], width: list[1]} }
-				end
+
+				vivify_hash(options, :svg_options, :size, {height: list[0], width: list[1]} )
 			end
 			svg_formats = ["normal", "reduced"]
 			opts.on("--svg-format FORMAT", svg_formats,
@@ -124,14 +105,47 @@ class OptParser
 				"	'normal' draws details of aligned exons and introns [default]",
 				"	'reduced' focuses on common introns only") do |f|
 				if f == "reduced" then
-					if options[:svg_options] then
-						options[:svg_options][:reduced] = true
-					else
-						options[:svg_options] = { reduced: true }
-					end
+					vivify_hash(options, :svg_options, :reduced, true)
 				else
 					# nothing to do, as 'normal' is default format and already listed as output format
 				end
+			end
+
+			opts.separator ""
+			opts.on("--pdb FILE", String,
+				"Mark consensus gene structure in pdb FILE", 
+				"Consenus gene structure contains introns conserved in N % of all genes",
+				"Specify N with option --consensus N; [default: 80%]",
+				"Two scripts for execution in PyMol are provided:", 
+				"'color_exons.py' to mark consensus exons",
+				"'color_splicesites.py' to mark splice junctions of consensus exons") do |file|
+				options[:output_format] << "pdb"
+				vivify_hash(options, :pdb, :path_to_pdb, file)
+				Helper.file_exist_or_die(file)
+			end
+			opts.on("--pdb-chain CHAIN", String,
+				"Mark gene structures for chain CHAIN",
+				"[Default: Use chain A]") do |opt|
+				vivify_hash(options, :pdb, :pdb_chain, opt)
+			end
+			opts.on("--pdb-ref-prot PROT", String,
+				"Use protein PROT as reference for alignment with pdb sequence", 
+				"[Default: First protein in alignment]") do |n|
+				vivify_hash(options, :pdb, :pdb_reference_protein, n)
+			end
+			opts.on("--pdb-force-alignment",
+		        "Force alignment between pdb and reference protein", 
+		        "Without this options set, alignment score > 70% is required for mapping." ) do |opt|
+				vivify_hash(options, :pdb, :pdb_force_alignment, true)
+			end
+			opts.on("--pdb-ref-prot-stuct",
+				"Color only intron positions occuring in the reference protein structure.") do |opt|
+				vivify_hash(options, :pdb, :pdb_ref_prot_struct_only, true)
+			end
+			opts.on("--pdb-penalize-endgaps", 
+				"Penalize gaps at end of the alignment (standard Needleman-Wunsch algorithm)", 
+				"[Default: Gaps at alignment ends are not penalized.]") do |opt|
+				vivify_hash(options, :pdb, :pdb_penalize_endgaps, true)
 			end
 
 			opts.separator ""
@@ -165,7 +179,7 @@ class OptParser
 					splitted_parts = range.split("-")
 					if splitted_parts.size != 2 then
 						# invalid syntax used for range definition: cannot parse it
-						Helper.abort("Invalid range definition in #{range}: start and stop must be separated by '-'")
+						Helper.abort("invalid range definition in #{range}: start and stop must be separated by '-'")
 					else
 						# syntax was ok, check for content
 						r_start = splitted_parts[0].to_i - 1 # convert from human to ruby counting
@@ -178,10 +192,10 @@ class OptParser
 
 						if r_start >= r_stop && r_stop != -1 then
 							# invalid syntax, start must be before stop
-							Helper.abort("Invalid range definition in #{range}: start must be lower than stop")
+							Helper.abort("invalid range definition in #{range}: start must be lower than stop")
 						elsif last_r_stop && r_start <= last_r_stop 
 							# invalid syntax: ranges are overlapping
-							Helper.abort("Invalid range definition in #{range_list}: overlapping ranges")
+							Helper.abort("invalid range definition in #{range_list}: overlapping ranges")
 						else
 							# valid syntax
 							last_r_stop = r_stop
@@ -228,5 +242,12 @@ class OptParser
 		rescue OptionParser::MissingArgument, OptionParser::InvalidArgument, OptionParser::InvalidOption => exc
 			Helper.abort exc
 	end # parse()
+
+	def self.vivify_hash(hash, outer_key, inner_key, inner_val)
+		if ! hash[outer_key] then 
+			hash[outer_key] = {}
+		end
+		hash[outer_key][inner_key] = inner_val
+	end
 
 end

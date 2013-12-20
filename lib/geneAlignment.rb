@@ -1,13 +1,22 @@
 # aligns gene objecs
 class GeneAlignment
 
-	attr_reader :aligned_genes
-
-	# class variables are shared by subclass Statistics
+	# use a class level variable to make it accessible from nested class
 	@@exon_placeholder = "-"
 	@@intron_placeholder = nil # defaults to the intron phase
 	Max_length_gene_name = 20 # also inherited, but a constant
 	Struct_str = "_structure"
+	# getter/setter for class variables (no instance variable, so self. is neccessary)
+	def self.exon_intron_placeholder=(arr)
+		@@exon_placeholder = arr[0] || "-" # default value
+		@@intron_placeholder = arr[1] || nil # defaults to intron phase
+	end
+	def self.exon_placeholder
+		@@exon_placeholder
+	end
+	def self.intron_placeholder
+		@@intron_placeholder
+	end
 
 	def initialize(genes)
 		@aligned_genes = detect_conserved_introns(genes)
@@ -76,149 +85,44 @@ class GeneAlignment
 		return converted_output
 	end
 
-def export_as_svg(options)
-	# the general idea:
-	# need to find the longest intron at every position and expand the shorter
-	# and have a method of Svg for every type of variable, such that the Svg method does not need to know that much about the underlying structure!!!
-
-	genes_with_aligned_features = {}
-
-	@aligned_genes.combination(2) do |gene1, gene2|
-
-		## prepare new data structure for genes (if neccessary)
-		if ! genes_with_aligned_features[gene1.name] then
-			genes_with_aligned_features[gene1.name] = PrepareGeneForSvg.new_data_struct_for_gene(gene1)
-		end
-		if ! genes_with_aligned_features[gene2.name] then 
-			genes_with_aligned_features[gene2.name] = PrepareGeneForSvg.new_data_struct_for_gene(gene2)
-		end
-
-		## are introns common to both genes?
-		# common_introns contain introns of both genes
-		common_introns = gene1.common_introns_of_this_and_other_gene(gene2)
-		## no: nothing to do
-		## yes: iterate through every pair of common introns
-		common_introns.sort.each_slice(2) do |intron1, intron2|
-			# find out which intron belongs to which gene 
-			if gene1.introns.include?(intron1) then
-				gene_features_belonging_to_intron1 = genes_with_aligned_features[gene1.name]
-				gene_features_belonging_to_intron2 = genes_with_aligned_features[gene2.name]
-				ind_intron1 = gene1.introns.index(intron1)
-				ind_intron2 = gene2.introns.index(intron2)
-			else
-				gene_features_belonging_to_intron1 = genes_with_aligned_features[gene2.name]
-				gene_features_belonging_to_intron2 = genes_with_aligned_features[gene1.name]
-				ind_intron1 = gene2.introns.index(intron1)
-				ind_intron2 = gene1.introns.index(intron2)
-			end
-
-			## 	compare length of g1 intron and g2 intron
-			## the gene with the shorter intron needs some more offset to keep consequtive features aligned
-			length_diff_intron1_intron2 = intron1.n_nucleotides - intron2.n_nucleotides
-			if length_diff_intron1_intron2 < 0 then
-				# intron 1 is shorter
-				PrepareGeneForSvg.adding_offset(gene_features_belonging_to_intron1, length_diff_intron1_intron2, ind_intron1)
-			else
-				# intron 2 is shorter
-				PrepareGeneForSvg.adding_offset(gene_features_belonging_to_intron2, length_diff_intron1_intron2, ind_intron2)
-			end
-		end
-
-	end
-debugger
-puts "next: scaling aligned features to meet ratio exons & introns and the total width"
-	# TODO
-	# add offsets to positions
-	# scale features (maybe collect some information for scaling during the processing, like the max lenght of exons and introns found in any gene)
-	# draw featrures 
-	# -(rewrite Svg: make one method to draw boxes and instruct it with the size and the color)
-	# -every type of feature should be printed in one rush (at moment, its more like every gene is printed in one rush, which require lots of logic about feature in Svg)
-
-	# idea for 'reduced': replace intron length by some fixed number!
-
-	# idea for drawing: start with large box (balken im hintergrund) for intron-extension
-	# plot boxes for features (exons, gaps and real introns) onto this 
-end
-
-	def export_as_svg_alter_ansatz(options)
+	def export_as_svg(options)
 		output = []
-		n_genes = @aligned_genes.size
-
-		## parameters for drawing
-		# params = Svg.parameters
-		size_per_gene = Svg.size_per_gene(n_genes) # height of each gene, including the space between genes
-		# height_per_gene_feature = Svg.height_of_gene_feature(size_per_gene) # size of boxes representing exons and introns
-
-		## collecing data
-		names = []
-		genes = []
-		y_pos = []
-
-		longest_aligned_seq = 0 # in nucleotides, counted per gene
-		longest_intronic_seq = 0 # in nucleotides, counted per gene
-		@aligned_genes.each_with_index do |gene, ind|
-
-			this_length_introns = gene.length_of_introns_in_nt
-			this_length_aligned_exons = gene.aligned_seq.size * 3
-
-			if this_length_introns > longest_intronic_seq then
-				longest_intronic_seq = this_length_introns
-			end
-			if this_length_aligned_exons > longest_aligned_seq then
-				longest_aligned_seq = this_length_aligned_exons
-			end
-
-			genes << {
-				exons: gene.get_all_exons_with_length, 
-				gaps: gene.get_all_gaps_with_length,
-				introns: gene.get_all_introns_with_length
-			}
-			names << gene.name[0..Max_length_gene_name]
-			y_pos << (ind * size_per_gene)
-		end
-# TODO
-# same color for conserved introns
-# via stats: assign color based on pos! and than count introns before to know which intron gets which color
-		## convert data to picture
-		scaled_genes = Svg.scale_genes_to_canvas(genes, longest_aligned_seq, longest_intronic_seq)
-
-		output << Svg::Painter.header(options[:size][:width], options[:size][:height])
-		output << Svg.print_names_and_genes(names, scaled_genes, y_pos, options[:reduced]) 
-		output << Svg::Painter.footer
-debugger
+		# TODO hand over to genealignment2svg!
 		return output
 	end
 
+	def export_as_pdb(options, consensus)
+# get ref seq - check
+# get seq from pdb - check
+# check for special chars in either - check
+# align pdb seq with referece - check
+# check if alignment score is ok - check
+# get introns to plot (consensus and/or of ref seq) - > use class Statistics
+# plot introns onto pdb: write pymol files
+		# need this to get ref seq and the introns
+		alignment_genestruct = export_as_alignment_with_introns
 
+		alignment_to_pdb_obj = GeneAlignment2pdb.new( alignment_genestruct, 
+			options[:pdb_reference_protein], options[:force_alignment], options[:pdb_ref_prot_struct_only], consensus,
+			options[:path_to_pdb], options[:pdb_chain], options[:pdb_penalize_endgaps]
+			)
+		score = alignment_to_pdb_obj.align_pdb_seq_with_ref_seq # return value 'score' is not neccessary, just to make apparent what happends
+		if alignment_to_pdb_obj.is_alignment_good_enough(score) then 
+			# map gene structures and write files
+			alignment_to_pdb_obj.map_genestruct_onto_pdb 
+		else
+			Helper.warn "Cannot map gene structure onto protein structure: Alignment score is too low."
+		end
 
-# might need a subclass for SVG output
-# svg: make gaps in exons distingishable from sequence in exons!
-# svg: make use of length stored in every exon and intron object
-# and also (for coloring the simple output): of the property: _is_conserved!!!
+		debugger
+		# create obj
+		# (should do alignment in init)
+		# write files
 
-	module PrepareGeneForSvg
-		def self.new_data_struct_for_gene(gene)
-			# each value is array of arrays (for each feature: position in alignment, offset, length)
-			return {
-				exons: expand_array_for_offset(gene.get_all_exons_with_length(true)), # true: convert amino acid to nucleotide count
-				exon_gaps: expand_array_for_offset(gene.get_all_gaps_with_length(true)), # true: convert aa to nt count 
-				introns: expand_array_for_offset(gene.get_all_introns_with_length)#,
-				# intron_gaps: []
-			}
-		end
-		def self.expand_array_for_offset(array)
-			array.map! do |ele|
-				ele = [ele[0],0,ele[1]]
-			end	
-		end
-		def self.adding_offset(struct, offset, ind)
-			struct.each do |key, val|
-				# add offset to every value consecutive to ind
-				val[ind+1..-1].map!{ |arr| arr[1] += offset }
-			end
-		end
+		# Todo:
+		# do i really need the output? maybe just a few lines to the logfile are fine ...
+
 	end
-
 	class Statistics
 
 		def initialize(names_and_patterns, is_alignment)
@@ -230,10 +134,10 @@ debugger
 		end
 
 		def intron_placeholder
-			GeneAlignment.class_variable_get(:@@intron_placeholder)
+			GeneAlignment.intron_placeholder
 		end
 		def exon_placeholder
-			GeneAlignment.class_variable_get(:@@exon_placeholder)
+			GeneAlignment.exon_placeholder
 		end
 
 		def intron_placeholder_to_regexp

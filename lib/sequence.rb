@@ -12,6 +12,15 @@ module Sequence
 		aseq[0..apos].gsub("-", "").length - 1
 	end
 
+	def is_protein_sequence_valid(seq)
+		if seq.match(/[^a-zA-Z*-]/) || seq.empty? then
+			# sequence contains special chars other than "-" (gap symbol), "*" (stop codon)
+			return false
+		else
+			return true
+		end
+	end	
+
 	def read_in_alignment(path)
 		names, seqs = [], []
 		IO.foreach(path) do |line|

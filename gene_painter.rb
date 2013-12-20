@@ -14,6 +14,7 @@ args = ARGV.map {|ele| ele.dup}
 OptParser.backwards_compability_check(args)
 options = OptParser.parse(args)
 
+
 ### open log file and specify its automatic closure at_exit
 fh_log = File.open(options[:path_to_log], "w")
 at_exit { fh_log.close }
@@ -102,54 +103,53 @@ options[:output_format].each do |format|
 		f_out_extension = ".fas"
 		is_alignment = true
 	when "txt_simple"
-		GeneAlignment.class_variable_set(:@@exon_placeholder, "-")
-		GeneAlignment.class_variable_set(:@@intron_placeholder, "|")
+		GeneAlignment.exon_intron_placeholder=["-", "|"]
 		output_arr = gene_alignment_obj.export_as_plain_txt
 		f_out_extension = "-std.txt"
 	when "txt_intron_phases"
-		GeneAlignment.class_variable_set(:@@exon_placeholder, "-")
-		GeneAlignment.class_variable_set(:@@intron_placeholder, nil )
+		GeneAlignment.exon_intron_placeholder=["-", nil]
 		output_arr = gene_alignment_obj.export_as_plain_txt
 		f_out_extension = "-intron-phase.txt"
 	when "txt_only_introns"
-		GeneAlignment.class_variable_set(:@@exon_placeholder, " ")
-		GeneAlignment.class_variable_set(:@@intron_placeholder, "|")
+		GeneAlignment.exon_intron_placeholder=[" ", "|"]
 		output_arr = gene_alignment_obj.export_as_plain_txt
 		f_out_extension = "-spaces.txt"
 	when "txt_phylo"
-		GeneAlignment.class_variable_set(:@@exon_placeholder, "0")
-		GeneAlignment.class_variable_set(:@@intron_placeholder, "1")
+		GeneAlignment.exon_intron_placeholder=["0", "1"]
 		output_arr = gene_alignment_obj.export_as_binary_alignment
 		f_out_extension = "-phylo.fas"
 		is_alignment = true
 	when "svg"
-		GeneAlignment.class_variable_set(:@@exon_placeholder, "-")
-		GeneAlignment.class_variable_set(:@@intron_placeholder, "|")
+		GeneAlignment.exon_intron_placeholder=["-", "|"]
 		gene_alignment_obj.export_as_svg( options[:svg_options] )
 		f_out_extension = ".svg"
+	when "pdb"
+		GeneAlignment.exon_intron_placeholder=["-", nil]
+		output_arr = gene_alignment_obj.export_as_pdb( options[:pdb], options[:consensus] )
 	else
 		# this should never be executed, but it does not harm anyway
 		puts "---"
 		puts "Unknown output option. Provide plain text output instead."
-		GeneAlignment.class_variable_set(:@@exon_placeholder, "-")
-		GeneAlignment.class_variable_set(:@@intron_placeholder, "|")
+		GeneAlignment.exon_intron_placeholder=["-", "|"]
 		f_out_extension = "-std.txt"
 		output_arr = gene_alignment_obj.export_as_plain_txt
 	end
 			
 	print "\t"
 	### add merged/consensus profile statistics 
-	if options[:merge] then
-		print "calculating merged profile ... "
-		stats_obj = GeneAlignment::Statistics.new(output_arr, is_alignment || false )
-		merged_pattern = stats_obj.get_merged_exon_intron_pattern(is_alignment || false )
-		output_arr << merged_pattern
-	end
-	if options[:consensus] then
-		print "calculating consensus profile ... "
-		stats_obj = GeneAlignment::Statistics.new(output_arr, is_alignment || false )
-		consensus_pattern = stats_obj.get_consensus_exon_intron_pattern(options[:consensus], is_alignment || false )
-		output_arr << consensus_pattern
+	if format != "pdb" then
+		if options[:merge] then
+			print "calculating merged profile ... "
+			stats_obj = GeneAlignment::Statistics.new(output_arr, is_alignment || false )
+			merged_pattern = stats_obj.get_merged_exon_intron_pattern(is_alignment || false )
+			output_arr << merged_pattern
+		end
+		if options[:consensus] then
+			print "calculating consensus profile ... "
+			stats_obj = GeneAlignment::Statistics.new(output_arr, is_alignment || false )
+			consensus_pattern = stats_obj.get_consensus_exon_intron_pattern(options[:consensus], is_alignment || false )
+			output_arr << consensus_pattern
+		end
 	end
 
 	### output the output :-)

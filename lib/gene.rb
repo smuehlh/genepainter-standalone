@@ -14,8 +14,11 @@ class Gene
 	# set instance variable @aligned_seq and also intron position in alignment
 	def add_aligned_seq(aligned_seq)
 		@aligned_seq = aligned_seq
+		@exons.each do |exon|
+			exon.set_variables_describing_exon_in_aligned_seq(aligned_seq)
+		end
 		@introns.each do |intron|
-			intron.pos_last_aa_in_aligned_seq_before_intron = intron.get_pos_in_alignment(aligned_seq)
+			intron.set_variables_describing_intron_in_aligned_seq(aligned_seq)
 		end
 	end
 
@@ -51,7 +54,7 @@ class Gene
 		# initialize: the very first pos is a gap of minimum length_one_gap
 		all_pos_with_length = [[all_gaps[0],length_one_gap]]
 		all_gaps.each_cons(2) do |x,y|
-			if y == x+length_one_gap then
+			if y == x+1 then
 				# same gap, make it a bit longer
 				all_pos_with_length[-1][1] += length_one_gap
 			else
@@ -62,26 +65,26 @@ class Gene
 		return all_pos_with_length
 	end
 
-	def get_all_exons_with_length(is_convert_to_nt_length=false)
+	def get_all_exons_with_length
 		if is_convert_to_nt_length then
 			length_one_pos = 3
 		else
 			length_one_pos = 1
 		end		
 		all_pos_with_length = @exons.collect do |exon|
-			[exon.get_start_pos_in_alignment(@aligned_seq) * length_one_pos , exon.aligned_seq_length(@aligned_seq) * length_one_pos ]
+			[exon.start_pos_in_aligned_protein * length_one_pos , exon.length_in_alignment * length_one_pos ]
 		end
 		return all_pos_with_length
 	end
 
-	def get_all_introns_with_length(is_convert_to_nt_length=false)
+	def get_all_introns_with_length
 		if is_convert_to_nt_length then
 			length_one_pos = 3
 		else
 			length_one_pos = 1
 		end	
 		all_pos_with_length = @introns.collect do |intron|
-			[intron.pos_last_aa_in_aligned_seq_before_intron * length_one_pos, intron.n_nucleotides]
+			[intron.pos_last_aa_in_aligned_protein_before_intron * length_one_pos, intron.n_nucleotides]
 		end
 		return all_pos_with_length
 	end
@@ -106,7 +109,7 @@ class Gene
 
 	def length_of_exons_in_aa
 		sum = 0
-		@exons.each { |exon| sum += (exon.end_pos_in_protein_seq - exon.start_pos_in_protein_seq) }
+		@exons.each { |exon| sum += exon.length_in_alignment }
 		return sum.to_f
 	end
 
@@ -123,7 +126,7 @@ class Gene
 
 		intron_pos_in_alignment = Array.new(@aligned_seq.size, exon_representation)
 		@introns.each do |intron|
-			pos = intron.pos_last_aa_in_aligned_seq_before_intron
+			pos = intron.pos_last_aa_in_aligned_protein_before_intron
 			intron_pos_in_alignment[pos] = intron_representation || intron.phase
 		end
 

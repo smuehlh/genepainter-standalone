@@ -26,32 +26,12 @@ class YamlToGene
 		end
 	end
 
-
-	# # this method is not needed, 
-	# # as the number of exons and introns is defined by their order
-	# def number_exons_and_introns
-	# 	exon_number = 0
-
-	# 	@contigs.each_with_index do |contig, contig_index|
-	# 		contig["number"] = contig_index.to_i + 1
-	# 		contig["matchings"].each do |matching|
-	# 			if matching["type"] == "exon" then
-	# 				exon_number += 1
-	# 				matching["number"] = exon_number.to_i
-	# 			elsif matching["type"] == "intron" ||  matching["type"] == "intron?" then
-	# 				matching["number"] = exon_number.to_i
-	# 			end
-	# 			matching["contig"] = contig_index.to_i + 1
-	# 		end
-	# 	end
-	# end
-
 	def to_gene
 		# a gene object needs exons and introns (and the aligned sequence, which is added somewhere else)
 		
 		# method exons_original returns only exons, no alternative transkripts
 		exons_original.each do |exon|
-			exon_obj = Exon.new(exon["prot_start"], exon["prot_end"])
+			exon_obj = Exon.new(exon["nucl_start"], exon["nucl_end"])
 			@gene.exons << exon_obj
 		end
 
@@ -70,21 +50,21 @@ class YamlToGene
 	end
 
 	def correct_intron_position_in_protein_for_phase(pos, phase)
+		# only necessary if the position is in amino acids
 		if phase == 2 then
 			pos += 1
 		end
 		return pos
 	end
 
-	# first nucleotide of gene has position 0, so "nucl_start" gives position in protein sequence and phase
-	# key to this is: 3 nucleotides code for 1 amino acid
+	# first nucleotide of gene has position 0, so "nucl_start" gives position in dna sequence and phase
 	def intron_phase_and_position_in_protein(nucleotide_pos)
-		# starting nucleotide modulus 3 equals the intron phase
+		# starting nucleotide modulus 3 equals the intron phase (3 nucleotides code for 1 amino acid)
 		phase = nucleotide_pos.to_i % 3
 
-		# starting nucleotide diveded by 3 equals (almost) intron start
-		pos = nucleotide_pos.to_i / 3
-		pos = correct_intron_position_in_protein_for_phase(pos, phase)
+		# starting nucleotide equals intron start
+		pos = nucleotide_pos.to_i
+		# pos = correct_intron_position_in_protein_for_phase(pos, phase) # only if pos in amino acids
 
 		return pos, phase
 	end
