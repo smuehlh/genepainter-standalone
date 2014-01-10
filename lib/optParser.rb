@@ -91,9 +91,10 @@ class OptParser
 			opts.on("--svg H,W", Array,
 				"Drawn SVG of size height x width") do |list|
 				list = list.map(&:to_i)
+				
 				if list.size != 2 || list.inject(:*) == 0 then
 					# number of args wrong or at least one is zero
-					Helper.abort "Invalid argument: --svg expects two numbers"
+					Helper.abort "Invalid argument: --svg expects two comma-separated numbers without spaces"
 				end
 				options[:output_format] << "svg"
 

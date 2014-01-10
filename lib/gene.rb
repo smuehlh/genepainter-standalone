@@ -39,54 +39,61 @@ class Gene
 		reduce_str_to_range(@aligned_seq)
 	end
 
-	def get_all_gap_pos
-		Helper.find_each_index(@aligned_seq, "-")
-	end
+	def get_gaps_with_length_mapped_onto_dna_seq
 
-	def get_all_gaps_with_length(is_convert_to_nt_length=false)
-		all_gaps = get_all_gap_pos
-		if is_convert_to_nt_length then
-			length_one_gap = 3
-		else
-			length_one_gap = 1
-		end
+		all_gap_pos_with_length = {}
+		length_one_gap_in_nt = 3
 
-		# initialize: the very first pos is a gap of minimum length_one_gap
-		all_pos_with_length = [[all_gaps[0],length_one_gap]]
-		all_gaps.each_cons(2) do |x,y|
-			if y == x+1 then
-				# same gap, make it a bit longer
-				all_pos_with_length[-1][1] += length_one_gap
-			else
-				# new gap
-				all_pos_with_length << [y*length_one_gap,length_one_gap]
+		@aligned_seq.each_char.with_index do |chr, ind|
+			if chr == "-" then 
+				# its a gap
+
+				# translate index to index of last nucleotide before the gap in dna sequence
+				pos_last_nt_before_gap = Sequence.alignment_pos2sequence_pos( ind, @aligned_seq ) * length_one_gap_in_nt
+
+				# fix problem arising from gap at beginning of the gene: it is mapped to position -1, but position 0 would be slightly more useful
+				if pos_last_nt_before_gap == (-1 * length_one_gap_in_nt) then 
+					pos_last_nt_before_gap = 0
+				end
+
+				# extend gap if mapped index already exists
+				if all_gap_pos_with_length[pos_last_nt_before_gap] then 
+					# extend gap by 3 nucleotides
+					all_gap_pos_with_length[pos_last_nt_before_gap] += 3
+				else
+					# add gap to list
+					all_gap_pos_with_length[pos_last_nt_before_gap] = 3
+				end
 			end
 		end
-		return all_pos_with_length
+
+		return all_gap_pos_with_length
 	end
 
-	def get_all_exons_with_length
-		if is_convert_to_nt_length then
-			length_one_pos = 3
+	def get_all_exons_with_length(is_convert_to_nt_length=false)
+		# collect start and lenght of each exon
+		if is_convert_to_nt_length then 
+			return @exons.collect do |exon|
+				[exon.start_pos_in_dna_seq, exon.length_in_nt]
+			end
 		else
-			length_one_pos = 1
-		end		
-		all_pos_with_length = @exons.collect do |exon|
-			[exon.start_pos_in_aligned_protein * length_one_pos , exon.length_in_alignment * length_one_pos ]
+			return @exons.collect do |exon|
+				[exon.start_pos_in_aligned_protein, exon.length_in_alignment]
+			end 
 		end
-		return all_pos_with_length
 	end
 
-	def get_all_introns_with_length
+	def get_all_introns_with_length(is_convert_to_nt_length=false)
+
 		if is_convert_to_nt_length then
-			length_one_pos = 3
+			return @introns.collect do |intron|
+				[intron.pos_last_nt_in_dna_seq_before_intron, intron.n_nucleotides]
+			end
 		else
-			length_one_pos = 1
-		end	
-		all_pos_with_length = @introns.collect do |intron|
-			[intron.pos_last_aa_in_aligned_protein_before_intron * length_one_pos, intron.n_nucleotides]
+			return @introns.collect do |intron|
+				[intron.pos_last_aa_in_aligned_protein_before_intron, intron.n_nucleotides]
+			end
 		end
-		return all_pos_with_length
 	end
 
 	def get_all_introns_with_phase

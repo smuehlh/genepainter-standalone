@@ -67,4 +67,8 @@ class Array
 			end
 		end
 	end
+
+	def sum
+		self.inject(0, :+)
+	end
 end

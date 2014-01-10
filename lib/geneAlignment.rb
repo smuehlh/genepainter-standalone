@@ -86,8 +86,13 @@ class GeneAlignment
 	end
 
 	def export_as_svg(options)
-		output = []
-		# TODO hand over to genealignment2svg!
+		# prepare data
+		genealignment2svg_obj = GeneAlignment2svg.new(@aligned_genes, options)
+
+		# draw genes
+		output = genealignment2svg_obj.create_svg
+		puts output
+		
 		return output
 	end
 
@@ -124,6 +129,7 @@ class GeneAlignment
 
 	end
 	class Statistics
+		attr_reader :n_introns_per_position
 
 		def initialize(names_and_patterns, is_alignment)
 # TODO binaere pattern, da geht addition & ist super schnell
