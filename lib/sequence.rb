@@ -9,17 +9,24 @@ module Sequence
 	end
 
 	def alignment_pos2sequence_pos(apos, aseq)
-		aseq[0..apos].gsub("-", "").length - 1
+		mapped_pos = aseq[0..apos].gsub("-", "").length - 1
+		# gaps at the begin of the sequence are mapped onto position - 1
+		# shift them back to position 0
+		mapped_pos = 0 if mapped_pos < 0
+		return mapped_pos
 	end
 
 	def is_protein_sequence_valid(seq)
-		if seq.match(/[^a-zA-Z*-]/) || seq.empty? then
+		if seq.match(/[^A-Z*-]/i) || seq.empty? then
 			# sequence contains special chars other than "-" (gap symbol), "*" (stop codon)
 			return false
 		else
 			return true
 		end
 	end	
+	def replace_invalid_chars_in_protein_sequence(seq)
+		return seq.gsub(/[^A-Z*-]/i, "X")
+	end
 
 	def read_in_alignment(path)
 		names, seqs = [], []
@@ -44,7 +51,7 @@ module Sequence
 		return names, seqs
 	end
 
-	def convert_fasta_array_back_to_arrays(fasta)
+	def convert_fasta_array_back_to_arrays_of_names_and_seqs(fasta)
 		names, seqs = [], []
 		fasta.each do |rec|
 			parts = rec.split("\n")

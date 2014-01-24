@@ -1,6 +1,17 @@
 module Helper
 	extend self
 
+	def open_log(file)
+		@fh_log= File.open(file, "w")
+		log "Logfile created on #{Time.now} by GenePainter"
+	end
+	def log(msg)
+		@fh_log.puts msg.to_s
+	end
+	def close_log
+		@fh_log.close
+	end
+
 	def abort(msg)
 		$stderr.puts "\nFatal error: #{msg.to_s}"
 		exit 1
@@ -23,7 +34,7 @@ module Helper
 	end
 
 	# inform which data are not used
-	def print_intersect_and_diff_between_alignment_and_gene(alignment_names, gene_names, fh_log)
+	def print_intersect_and_diff_between_alignment_and_gene(alignment_names, gene_names)
 		common = alignment_names & gene_names
 		missing_genes = alignment_names - gene_names
 		missing_seqs = gene_names - alignment_names
@@ -37,8 +48,8 @@ module Helper
 		puts "Using #{common.size} sequences."
 
 		# write to log file which seqs and genes exactly are used
-		fh_log.puts ""
-		fh_log.puts "Used #{common.join(", ")} for computation."
+		log ""
+		log "Used #{common.join(", ")} for computation."
 
 	end
 
@@ -50,6 +61,18 @@ module Helper
 			inds << i
 		end
 		return inds
+	end
+
+	def convert_number_to_human_readable_string(num)
+		# i.e. add thousand separator
+		num = num.to_s 
+		# 1) split the string in chunks of 3 [scan] - but start from last position [reverse]
+		# 2) join the chunks by a comma [join] - but reverse again to see orignal number [reverse]
+		return num.reverse.scan(/.{1,3}/).join(",").reverse
+	end
+
+	def ruby2human_counting(num)
+		num + 1
 	end
 end
 

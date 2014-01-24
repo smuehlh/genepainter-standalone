@@ -4,25 +4,35 @@ if ! RUBY_VERSION.include?("2.0") then
 	Helper.abort( "You are using Ruby #{RUBY_VERSION}. For GenePainter, Ruby >= 2.0 is needed.")
 end
 
-# require gems and library
+# require .rb files in library (including all subfolders)
 # TODO remove ruby-debug
 require 'ruby-debug'
-Dir[File.join(File.dirname(__FILE__), 'lib', '*.rb')].each {|file| require File.absolute_path(file) }
+Dir[File.join(File.dirname(__FILE__), 'lib', '**', '*.rb')].each do |file|
+	require File.absolute_path(file)
+end
 
 ### parse command line arguments
 args = ARGV.map {|ele| ele.dup}
 OptParser.backwards_compability_check(args)
 options = OptParser.parse(args)
 
+### function defintion
+# write output verbosely to file
+def write_verbosely_output_to_file(f_name, output)
+	puts "\t writing output to #{f_name} ... "
+	# add newline to string, in case it does not end with one
+	if output.end_with?("\n") then 
+		output << "\n"
+	end
+	IO.write( f_name, output, :mode => "w" )
+end
 
-### open log file and specify its automatic closure at_exit
-fh_log = File.open(options[:path_to_log], "w")
-at_exit { fh_log.close }
-fh_log.puts "GenePainter logfile"
-fh_log.puts "Called with arguments: #{ARGV.join(" ")}"
-fh_log.puts "Date: #{Time.now}"
+### open log file, and specify its automatic closure at_exit
+Helper.open_log( options[:path_to_log] )
+at_exit { Helper.close_log }
+Helper.log "Program call: #{ARGV.join(" ")}"
 
-### read in data, use only intersect of alingment and gene structures
+### read in data, use only intersect of alignment and gene structures
 print "Read in alignment and genes ..."
 ## alignment
 aligned_seqs_names, aligned_seqs = Sequence.read_in_alignment(options[:path_to_alignment])
@@ -39,8 +49,14 @@ end
 gene_objects = [] # a list of all gene objects
 common_names = aligned_seqs_names & gene_names
 
+if common_names.empty? then 
+	Helper.abort "No matches between alignment and gene structures."
+end
+
 # make sure all _needed_ aligned sequences are of same length
 common_aligned_seqs = Sequence.ensure_seqs_have_same_length(aligned_seqs, aligned_seqs_names, common_names)
+# remove common gaps if neccessary
+common_aligned_seqs = Sequence.remove_common_gaps(common_aligned_seqs) if options[:ignore_common_gaps]
 
 # merge gene structure and sequence into a gene object
 common_names.each_with_index do |gene_name, ind|
@@ -82,87 +98,65 @@ end
 puts " done."
 
 # inform which data are not used
-Helper.print_intersect_and_diff_between_alignment_and_gene(aligned_seqs_names, gene_names, fh_log)
+Helper.print_intersect_and_diff_between_alignment_and_gene(aligned_seqs_names, gene_names)
 
 ### align genes
 puts ""
 print "Aligning genes ..."
-gene_alignment_obj = GeneAlignment.new(gene_objects)
+
+# initiate an gene alignment object 
+# this calculates kind of an "master format", the exon-intron-patterns for each gene
+gene_alignment_obj = GeneAlignment.new(gene_objects, options[:consensus], options[:merge])
 puts " done."
 
-### prepare output 
+### prepare output for every requested format
+# checking for each possible format, if it was specified, is faster than looping through all specified ones
 puts "Prepare output ... "
-output_arr = []
-f_out_extension = ""
 
-### ... for every requested output format
-options[:output_format].each do |format|
-	case format
-	when "alignment_with_intron_phases"
-		output_arr = gene_alignment_obj.export_as_alignment_with_introns
-		f_out_extension = ".fas"
-		is_alignment = true
-	when "txt_simple"
-		GeneAlignment.exon_intron_placeholder=["-", "|"]
-		output_arr = gene_alignment_obj.export_as_plain_txt
-		f_out_extension = "-std.txt"
-	when "txt_intron_phases"
-		GeneAlignment.exon_intron_placeholder=["-", nil]
-		output_arr = gene_alignment_obj.export_as_plain_txt
-		f_out_extension = "-intron-phase.txt"
-	when "txt_only_introns"
-		GeneAlignment.exon_intron_placeholder=[" ", "|"]
-		output_arr = gene_alignment_obj.export_as_plain_txt
-		f_out_extension = "-spaces.txt"
-	when "txt_phylo"
-		GeneAlignment.exon_intron_placeholder=["0", "1"]
-		output_arr = gene_alignment_obj.export_as_binary_alignment
-		f_out_extension = "-phylo.fas"
-		is_alignment = true
-	when "svg"
-		GeneAlignment.exon_intron_placeholder=["-", "|"]
-		gene_alignment_obj.export_as_svg( options[:svg_options] )
-		f_out_extension = ".svg"
-	when "pdb"
-		GeneAlignment.exon_intron_placeholder=["-", nil]
-		output_arr = gene_alignment_obj.export_as_pdb( options[:pdb], options[:consensus] )
-	else
-		# this should never be executed, but it does not harm anyway
-		puts "---"
-		puts "Unknown output option. Provide plain text output instead."
-		GeneAlignment.exon_intron_placeholder=["-", "|"]
-		f_out_extension = "-std.txt"
-		output_arr = gene_alignment_obj.export_as_plain_txt
-	end
-			
-	print "\t"
-	### add merged/consensus profile statistics 
-	if format != "pdb" then
-		if options[:merge] then
-			print "calculating merged profile ... "
-			stats_obj = GeneAlignment::Statistics.new(output_arr, is_alignment || false )
-			merged_pattern = stats_obj.get_merged_exon_intron_pattern(is_alignment || false )
-			output_arr << merged_pattern
-		end
-		if options[:consensus] then
-			print "calculating consensus profile ... "
-			stats_obj = GeneAlignment::Statistics.new(output_arr, is_alignment || false )
-			consensus_pattern = stats_obj.get_consensus_exon_intron_pattern(options[:consensus], is_alignment || false )
-			output_arr << consensus_pattern
-		end
-	end
-
-	### output the output :-)
-	f_out = options[:path_to_output] + f_out_extension
-	print "writing output to #{f_out} ... "
-	IO.write( f_out, output_arr.join("\n"), :mode => "w" )
-	puts "done."
-
+if options[:output_format_list].include?("alignment_with_intron_phases") then 
+	# this is in most cases the master format
+	output = gene_alignment_obj.export_as_alignment_with_introns
+	f_out = options[:path_to_output] + ".fas"
+	write_verbosely_output_to_file(f_out, output)
 end
 
+if options[:output_format_list].include?("txt_simple") then
+	output = gene_alignment_obj.export_as_plain_txt("-", "|")
+	f_out = options[:path_to_output] + "-std.txt"
+	write_verbosely_output_to_file(f_out, output)
+end
 
+if options[:output_format_list].include?("txt_intron_phases") then
+	output = gene_alignment_obj.export_as_plain_txt("-", nil)
+	f_out = options[:path_to_output] + "-intron-phase.txt"
+	write_verbosely_output_to_file(f_out, output)
+end
+		
+if options[:output_format_list].include?("txt_only_introns") then 
+	output = gene_alignment_obj.export_as_plain_txt(" ", "|")
+	f_out = options[:path_to_output] + "-spaces.txt"
+	write_verbosely_output_to_file(f_out, output)
+end
 
-# TODO
-# replace buggy Needleman-Wunsch algo by a working one
-# inspect the code from marcel: /fab8/mahe/work/pyscipio/src/_fastnw (but there, one of the strings is DNA, the other protein and frameshifts are considered: in trace back, rucksprung-adresse is also stored)
+if options[:output_format_list].include?("txt_phylo") then 
+	output = gene_alignment_obj.export_as_binary_alignment
+	f_out = options[:path_to_output] + "-phylo.fas"
+	write_verbosely_output_to_file(f_out, output)
+end
 
+if options[:output_format_list].include?("svg") then 
+	output = gene_alignment_obj.export_as_svg( options[:svg_options] )
+	f_out = options[:path_to_output] + ".svg"
+	write_verbosely_output_to_file(f_out, output)
+end
+
+if options[:output_format_list].include?("pdb") then 
+	# pdb option creates two scripts
+	output1, output2 = gene_alignment_obj.export_as_pdb( options[:pdb_options] )
+	f_out = options[:path_to_output] + "-color_exons.py"
+	write_verbosely_output_to_file(f_out, output1)
+	f_out = options[:path_to_output] + "-color_splicesites.py"
+	write_verbosely_output_to_file(f_out, output2)
+end
+
+puts " done."

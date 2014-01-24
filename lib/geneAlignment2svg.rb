@@ -38,6 +38,12 @@ class GeneAlignment2svg
 		# prepare maximal lenght -> needed to scale introns correctly
 		calc_max_x_pos_exon
 
+		if @is_default_color_scheme then
+			fixed_intron_size = nil
+		else
+			fixed_intron_size = calc_intron_size_for_nondefault_color_scheme
+		end
+
 		# prepare intron data
 		# find all intron positions in alignment (over all genes) and intron of maximal lenght
 		@all_intronpos_with_maxlength = {} # key: intron position; value: lenght of longest intron
@@ -45,12 +51,16 @@ class GeneAlignment2svg
 		@aligned_genes.each do |gene|
 
 			# get list of all introns and their lenght in this gene
-			intronpos_length = gene.get_all_introns_with_length(true) # true: get positions in nucleotides
+			intronpos_length = gene.get_all_introns_with_length
 
 			# collect data
 			intronpos_length.each do |pos_length|
 				pos = pos_length[0]
-				len = pos_length[1]
+				if @is_default_color_scheme then 
+					len = enlongate_intron_to_avoid_gaps(pos_length[1])
+				else
+					len = fixed_intron_size
+				end
 
 				max_len_so_far = @all_intronpos_with_maxlength[pos]
 				if max_len_so_far then
@@ -61,8 +71,7 @@ class GeneAlignment2svg
 					@all_intronpos_with_maxlength[pos] = len
 				end
 			end
-break
-# TODO break nur solange SVG nur fuer 1. Gen 
+
 		end
 
 		# prepare the scaling factor for introns
@@ -70,7 +79,7 @@ break
 
 		# apply scaling factor
 		@all_intronpos_with_maxlength.each do |k,v|
-			@all_intronpos_with_maxlength[k] = fix_intron_length(v)
+			@all_intronpos_with_maxlength[k] = scale_down_intron_length(v)
 		end
 
 	end
@@ -79,143 +88,214 @@ break
 	# draw only exons, gaps in exons and introns, but not the gaps in introns
 	# for these 'gaps in introns', create large box in background
 	def create_svg
+
 		svg = []
 		svg << Svg::Painter.header( @svg_size[:width], @svg_size[:height] )
 
 		# need max x-position for scaling: this is result of exons and introns, introns need to be scaled
 		x_pos_max = calc_max_x_pos
+
 		n_genes = @aligned_genes.size
 
 		svg_obj = Svg.new(n_genes, x_pos_max, @is_default_color_scheme) # svg object needed for actual drawing
 		@aligned_genes.each_with_index do |gene, y_pos|
+
 			# index equals the y_position in the final drawing
 
 			# draw text
 			svg << svg_obj.print_text(gene.name, y_pos)
 
-			# draw 'background' box, only visible if there is no feature (= an "gap" in an intron ) 
-			svg << svg_obj.draw_box(0, x_pos_max, y_pos, "intron-gap")
+			# draw the background: artificially streches in exons to make the stay aligned
+			background_col = svg_obj.colors[:exon_streched]
+			svg << svg_obj.draw_horizontal_line(0, x_pos_max, y_pos, {type: "exon_streched"})
 
-			# gaps within this gene
-			@all_gappos_with_length_this_gene = gene.get_gaps_with_length_mapped_onto_dna_seq
-
-			# draw gene
+			# draw gene, without gaps
 			gene.exons.each_with_index do |exon, ind|
-				is_calc_offset_including_pos = true
 
-				# exon
-				exon_startpos = exon.start_pos_in_dna_seq 
-				exon_startpos_drawing = calc_startpos_drawing(exon_startpos, "exon")
+				# exon: must be splitted, due to introns in other genes
+				exon_startpos_drawing = calc_pos_drawing( exon.start_pos_in_aligned_protein, "exon" )
+				exon_endpos_drawing = calc_pos_drawing( exon.end_pos_in_aligned_protein, "exon-ende" )
+				exon_length = exon_endpos_drawing - exon_startpos_drawing
 
-				# strech box to include some space for gaps in exon
-				exon_length = exon.length_in_nt + calc_gap_length_upto_pos(exon_startpos, exon.end_pos_in_dna_seq)
-puts "Exon: #{exon.start_pos_in_dna_seq} => #{exon_startpos_drawing}: #{exon_length}"	
-# TODO 
-# problem 1) exongap-boxen werden ncoh nicht richtig gezeichnet (siehe ang-coro2a)
-# problem 2) position intron/laenge exon: da wo hintergrund durchscheint
-				svg << svg_obj.draw_box(exon_startpos_drawing, exon_length, y_pos, "exon")
+				svg << svg_obj.draw_box( exon_startpos_drawing, exon_length, y_pos, svg_obj.colors[:exon])
+				# exon_pieces_startpos_drawing_with_length = 
+				# 	split_exons_at_foreign_intronpos( exon.start_pos_in_aligned_protein, exon.length_in_alignment )
+
+				# exon_pieces_startpos_drawing_with_length.each do |startpos_drawing, length_drawing|
+				# 	svg << svg_obj.draw_box( startpos_drawing, length_drawing, y_pos, svg_obj.colors[:exon] )
+				# end
 
 				# intron
-				this_intron = gene.introns[ind]
-				next if this_intron.nil? # last index of exon is not matched by an intron
-				intron_startpos = this_intron.pos_last_nt_in_dna_seq_before_intron
-				intron_startpos_drawing = calc_startpos_drawing(intron_startpos, "intron")
+				intron = gene.introns[ind]
+				next if intron.nil? # there is no intron after the last exon
+				# offset: do not include this intron
+				intron_startpos_drawing = calc_pos_drawing( intron.pos_last_aa_in_aligned_protein_before_intron, "intron" ) 
+				if @is_default_color_scheme then 
+					intron_length = scale_down_intron_length( enlongate_intron_to_avoid_gaps( intron.n_nucleotides ) )
+					intron_color = svg_obj.colors[:intron]
+				else
+					intron_length = calc_intron_size_for_nondefault_color_scheme
+					intron_color = determine_intron_color( intron.pos_last_aa_in_aligned_protein_before_intron )
+				end
 
-				intron_length = fix_intron_length( this_intron.n_nucleotides )
-puts "Intron: #{this_intron.pos_last_nt_in_dna_seq_before_intron} => #{intron_startpos_drawing}: #{intron_length}"		
-puts ""		
-				svg << svg_obj.draw_box(intron_startpos_drawing, intron_length, y_pos, "intron")
+				svg << svg_obj.draw_box(intron_startpos_drawing, intron_length, y_pos, intron_color)
+
+				# intron-gaps
+				# is there an longer intron at same position?
+				max_len_this_intron_pos = @all_intronpos_with_maxlength[ intron.pos_last_aa_in_aligned_protein_before_intron ]
+				if max_len_this_intron_pos > intron_length then 
+					gap_startpos_drawing = intron_startpos_drawing + intron_length
+					gap_length = enlongate_intron_to_avoid_gaps( max_len_this_intron_pos - intron_length )
+
+					svg << svg_obj.draw_box(gap_startpos_drawing, gap_length, y_pos, svg_obj.colors[:intron_gap])
+				end
+
 			end
 
-			# gaps
-			@all_gappos_with_length_this_gene.each do |pos, len|
-				gap_startpos_drawing = calc_startpos_drawing(pos, "exon")
-				svg << svg_obj.draw_box(gap_startpos_drawing, len, y_pos, "exon-gap")
+			# draw gaps
+			# draw them after then exons are drawn, as gaps may be on top of exons
+			# split gaps because of introns in other genes
+			gene.get_all_gaps_in_aligned_seq.each do |pos, len|
+				gap_startpos_drawing = calc_pos_drawing( pos, "exon" )
+				gap_endpos_drawing = calc_pos_drawing( pos+len, "exon-ende" )
+				gap_length = gap_endpos_drawing - gap_startpos_drawing
+
+				svg << svg_obj.draw_box( gap_startpos_drawing, gap_length, y_pos, svg_obj.colors[:exon_gap])
+
+				# gap_pieces_startpos_drawing_with_length = 
+				# 	split_exons_at_foreign_intronpos( pos, len )
+
+				# gap_pieces_startpos_drawing_with_length.each do |startpos_drawing, length_drawing|
+				# 	svg << svg_obj.draw_box( startpos_drawing, length_drawing, y_pos, svg_obj.colors[:exon_gap] )
+				# end
 			end
 
-break
+		# TODO 
+		# 5) artifical gap am ende statt mittendrin in feature; - als cmd-line option?
+
 		end
+
+		# add legend 
+		length_one_nt_exon = 1/3.0 # exon positions are in amino acid count
+		length_one_nt_intron = 1 * @scaling_factor_introns # intron positions are in nt count, but scaled
+		svg << svg_obj.print_legend( @aligned_genes.size + 1, length_one_nt_exon, length_one_nt_intron )
 
 		svg << Svg::Painter.footer
 
-		return svg
+		return svg.join("\n")
 	end
 
-	def fix_intron_length(len)
-		# introns are usually much, much longer than exons. Thus, the must be scaled down. 
-		# - or -
-		# their length is not important at all, just their position
-		if @is_default_color_scheme then 
-			# effective size is proportional to real size
-			return len * @scaling_factor_introns
-		else
-			# effective size is fixed; not related to real size
-			return ( @max_x_pos_exon * (5.0/100) ).round(2) # each intron should account for 5% of total exon length
-		end
+	# common introns (drawn underneath each other) will have the same color
+	# thus, the position of the intron in the original alignment determines its color
+	def determine_intron_color(pos)
+		all_available_colors = Svg.get_list_of_intron_colors
+		intron_ind = @all_intronpos_with_maxlength.keys.sort.index(pos)
+
+		# map intron via modulo operation onto colors
+		return all_available_colors[ intron_ind % all_available_colors.size ]
+	end
+
+	# introns are usually much, much longer than exons. Thus, the must be scaled down. 
+	def scale_down_intron_length(len)
+		return len * @scaling_factor_introns 
 	end
 
 	def calc_scaling_factor_introns
-		total_space = @max_x_pos_exon / Svg.get_exon_intron_ratio
-		final_max_x_pos_intron = total_space * Svg.get_exon_intron_ratio
-
-		@scaling_factor_introns = final_max_x_pos_intron / calc_max_x_pos_intron
+		if @is_default_color_scheme then 
+			total_space = @max_x_pos_exon / Svg.get_exon_intron_ratio
+			final_max_x_pos_intron = total_space * Svg.get_exon_intron_ratio
+			return @scaling_factor_introns = final_max_x_pos_intron / calc_max_x_pos_intron
+		else
+			return @scaling_factor_introns = 1
+		end
 	end
-
+	def calc_intron_size_for_nondefault_color_scheme
+		return ( @max_x_pos_exon * (5.0/1000) ).round(2) # each intron should account for 0.5% of total exon length
+	end
 	def calc_max_x_pos
 		# sum of exon and intron
 		@max_x_pos_exon + calc_max_x_pos_intron
 	end
 	def calc_max_x_pos_intron
-		@all_intronpos_with_maxlength.values.sum # already in nt count
+		if @is_default_color_scheme then 
+			# introns must be drawing in proportion to their actual size
+			return @all_intronpos_with_maxlength.values.sum
+		else
+			# introns must be drawn in fixed size
+			return @all_intronpos_with_maxlength.keys.size * calc_intron_size_for_nondefault_color_scheme
+		end
 	end
 	def calc_max_x_pos_exon
-		# find the last postion to be drawn is the _end_ of the last exon
-		# the right-most, last exon of all genes ends at nucleotide position alignment_size * 3
+		# the last position to be drawn is the end of the right-most exon
 
 		x_max_exons =  @aligned_genes.collect {|gene| gene.aligned_seq.size}.max # maximum space needed for exons equals the space needed for the alignment
-		@max_x_pos_exon = x_max_exons * 3 # convert aa to nt count
+		@max_x_pos_exon = x_max_exons
 	end
 
-	def calc_offset_due_to_introns(alignmentpos, is_include_alignmentpos)
-		offset = 0
-		@all_intronpos_with_maxlength.each do |pos, len|
-			if pos < alignmentpos then 
-				offset += len
-			elsif pos == alignmentpos && is_include_alignmentpos 
-				offset += len
-			end
+	# offset at a certain position due to introns (length) occuring until this position
+	def calc_offset_due_to_introns(pos, is_include_pos)
+		introns_maxlen_upto_pos = @all_intronpos_with_maxlength.select { |intronpos, intronlen| intronpos < pos }
+		offset_upto_pos = introns_maxlen_upto_pos.values.sum # sum up all values (the maximal lenght at this pos)
+
+		if is_include_pos && @all_intronpos_with_maxlength.has_key?(pos) then 
+			offset_upto_pos += @all_intronpos_with_maxlength[pos]
 		end
-		return offset
+		
+		return offset_upto_pos
 	end
 
-	def calc_offset_due_to_gaps_in_exons(startpos=0, endpos)
-		# problem: muss offset nur die gaps in exons beruecksichtigen, oder auch die zwischen exons?  
-		offset = 0
-		@all_gappos_with_length_this_gene.each do |pos, len|
-			if startpos <= pos then 
-				if pos < endpos then
-					offset += len
-				end
-			end 
-		end
-		return offset
-	end
-
-	def calc_startpos_drawing(startpos, type)
+	# add the offset due to introns 
+	# handle exons and introns differently: 
+	# 	exons, offset needs to be calculated including the pos itself
+	# 	introns, offset should not include the pos itself
+	def calc_pos_drawing(pos, type)
 		if type == "exon" then 
 			is_exon = true
 		else
 			is_exon = false
 		end
-		return startpos + 
-			calc_offset_due_to_introns(startpos, is_exon) + 
-			calc_offset_due_to_gaps_in_exons(startpos)
+		return pos + calc_offset_due_to_introns(pos, is_exon)
+	end
+	def get_intronpos_within_range(startpos, endpos)
+		@all_intronpos_with_maxlength.keys.select do |key|
+			if startpos <= key && key < endpos then 
+				key
+			end
+		end.sort 
 	end
 
-	def calc_gap_length_upto_pos(startpos, endpos)
-		matching_pos_len = @all_gappos_with_length_this_gene.select do |thispos, len| 
-			len if startpos < thispos && thispos < endpos
+	# split exon (and gaps) into pieces by introns in other genes
+	# convert new positions and lengthes into drawing_positions!
+	def split_exons_at_foreign_intronpos( startpos, len )
+		startpos_len_pieces = []
+
+		endpos = startpos + len # endpos regarding the underlying alignment, not svg
+
+		this_start = startpos
+		get_intronpos_within_range(startpos, endpos).each do |this_end|
+
+			# add exon piece to results, convert to drawing positions
+			startpos_drawing = calc_pos_drawing( this_start, "exon" ) # offset: include intron located at start pos
+			endpos_drawing = calc_pos_drawing( this_end, "exon-ende" ) # offset: don't include intron located at end pos
+			length_drawing = endpos_drawing - startpos_drawing
+			startpos_len_pieces << [startpos_drawing, length_drawing]
+
+			this_start = this_end
 		end
-		return matching_pos_len.values.sum
+
+		# special case: no intron interrupts this exon
+		# simply return exon as it is (but of course fit for drawing)
+		if startpos_len_pieces.empty? then 
+			startpos_drawing = calc_pos_drawing( startpos, "exon" )
+			endpos_drawing = calc_pos_drawing( endpos, "exon-ende" )
+			length_drawing = endpos_drawing - startpos_drawing
+			startpos_len_pieces << [startpos_drawing, length_drawing]
+		end
+
+		return startpos_len_pieces
+	end
+
+	def enlongate_intron_to_avoid_gaps(num)
+		return num + 1
 	end
 end

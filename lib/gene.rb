@@ -39,30 +39,27 @@ class Gene
 		reduce_str_to_range(@aligned_seq)
 	end
 
-	def get_gaps_with_length_mapped_onto_dna_seq
-
+	def get_all_gaps_in_aligned_seq
 		all_gap_pos_with_length = {}
-		length_one_gap_in_nt = 3
 
 		@aligned_seq.each_char.with_index do |chr, ind|
 			if chr == "-" then 
 				# its a gap
 
-				# translate index to index of last nucleotide before the gap in dna sequence
-				pos_last_nt_before_gap = Sequence.alignment_pos2sequence_pos( ind, @aligned_seq ) * length_one_gap_in_nt
-
-				# fix problem arising from gap at beginning of the gene: it is mapped to position -1, but position 0 would be slightly more useful
-				if pos_last_nt_before_gap == (-1 * length_one_gap_in_nt) then 
-					pos_last_nt_before_gap = 0
+				# special case: the sequence starts with an gap
+				if ind == 0 then 
+					all_gap_pos_with_length[ ind ] = 1
+					next
 				end
 
-				# extend gap if mapped index already exists
-				if all_gap_pos_with_length[pos_last_nt_before_gap] then 
-					# extend gap by 3 nucleotides
-					all_gap_pos_with_length[pos_last_nt_before_gap] += 3
+				last_chr = @aligned_seq[ind - 1]
+				if last_chr == "-" then 
+					# gap extension
+					last_gap_pos = all_gap_pos_with_length.keys.max
+					all_gap_pos_with_length[ last_gap_pos ] += 1
 				else
-					# add gap to list
-					all_gap_pos_with_length[pos_last_nt_before_gap] = 3
+					# gap start
+					all_gap_pos_with_length[ ind ] = 1
 				end
 			end
 		end
@@ -103,6 +100,12 @@ class Gene
 		return all_pos_with_phase
 	end
 
+	def get_all_intronpositions
+		@introns.collect do |intron|
+			intron.pos_last_aa_in_aligned_protein_before_intron
+		end
+	end
+
 	# a conserved intron is at same position and phase as an intron in another gene
 	def get_all_conserved_introns
 		@introns.select do |intron|
@@ -129,7 +132,8 @@ class Gene
 	# a sequence of same length as "@aligned_seq" consisting of gaps and intron phases only
 	# exon_representation will be used to display exon, default: "-"
 	# intron_representation will be used to display intron, default: intron phase
-	def plot_intron_phases_onto_aligned_seq(exon_representation="-", intron_representation=nil)
+	def plot_intron_phases_onto_aligned_seq(exon_representation=nil, intron_representation=nil)
+		exon_representation ||= "-"
 
 		intron_pos_in_alignment = Array.new(@aligned_seq.size, exon_representation)
 		@introns.each do |intron|

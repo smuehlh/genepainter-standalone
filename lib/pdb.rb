@@ -1,9 +1,10 @@
 class Pdb
 
-    attr_reader :seq
+    attr_accessor :seq, :chain
 
 	def initialize(pdb_data, chain)
-		@chain = (chain || "a").upcase
+        # order does matter: 1) chain, 2) sequence (depends on @chain)
+		@chain = (chain || "a").upcase 
 		@seq = get_seq_from_pdb_file(pdb_data)
 	end
 
@@ -31,7 +32,7 @@ class Pdb
 				if this_seq_pos != seq_pos_last_visited then 
 					if this_seq_pos > seq_pos_last_visited + 1 then 
 						# add gap(s)
-						seq << "-" * (this_seq_pos - seq_pos_last_visited - 1)
+						seq << "X" * (this_seq_pos - seq_pos_last_visited - 1)
 					end
 					# add amino acid in one letter code
 
@@ -44,18 +45,11 @@ class Pdb
 			end
 		end
 
-        # validate sequence
-
         pdb_seq = seq.join("")
-
-        if ! Sequence.is_protein_sequence_valid(pdb_seq) then
-            Helper.abort("Cannot map gene structure onto protein structure: Invalid characters in PDB sequence")
-        end
         return pdb_seq
 	end
 
     def amino_acid_3_to_1(abbr)
-        # TODO alle upcase
         table = {"ALA" => "A",
             "ARG" => "R",
             "ASN" => "N",

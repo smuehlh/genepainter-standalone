@@ -1,16 +1,19 @@
 class Svg
 	# has all parameters and ratios for drawing
 	# talks to the SvgPainter
+	attr_reader :colors
 
 	def initialize(n_lines, x_pos_max, is_default_color_scheme)
 		@height_per_gene = calc_height_per_gene(n_lines)
 		@scaling_factor = calc_scaling_factor_per_gene(x_pos_max)
-		@font_size = @height_per_gene.floor
+		@font_size = @height_per_gene.round(2)
 
 		@colors = is_default_color_scheme ? normal_colors : fancy_intron_colors
 	end
 
 	def calc_height_per_gene(n_lines)
+		# add additional lines for the legend if neccessary
+		n_lines += 3
 		return Svg.parameters[:total_height] / n_lines * Svg.ratios[:gene_to_space]
 	end
 
@@ -18,78 +21,213 @@ class Svg
 		return (Svg.parameters[:total_width] - Svg.parameters[:distance_genename_to_gene]) / x_pos_max
 	end
 
-	def scale_and_shift_pos(pos)
+	def scale_and_shift_x_pos(pos)
 		# scales position by scaling factor and shifts it by offset for gene name
 		# this must be done for all position-data of boxes
-		return (pos * @scaling_factor) + Svg.parameters[:distance_genename_to_gene]
+		return round_pos( (pos * @scaling_factor) + Svg.parameters[:distance_genename_to_gene] )
 	end
 
-	def scale_lenght_specification(pos)
+	def scale_x_lenght(pos)
 		# scales position by scaling factor, but does not shift by offset
 		# shifting must not be done for length specification
-		return pos * @scaling_factor
+		return round_pos( pos * @scaling_factor )
 	end
-
+	def scale_y_pos(pos)
+		round_pos( pos * @height_per_gene )
+	end
+	def get_y_length
+		round_pos( @height_per_gene * Svg.ratios[:gene_to_space] )
+	end
 	def shift_text_pos(pos)
 		# shifts the baseline of text
 		# effecitvly, the text is centered towards the baseline
-		return pos + @font_size * (3.0/4.0)
+		return round_pos(pos + @font_size * (3.0/4.0))
 	end
 	def round_pos(val)
 		# the svg will be full of rounding inprecisions anyway, but with its values rounded, its at least human readable
 		return val.round(4)
 	end
+	def shift_y_pos_line(pos)
+		# shift y_pos (is upper left corner) towards center of a box
+		round_pos( (pos * @height_per_gene) + (@height_per_gene / 2) )
+	end
+	def get_line_width 
+		round_pos( @height_per_gene * 0.1 )
+	end
+
+
+	# def alt_draw_box(x_start, x_length, y_pos, type, intron_col="")
+	# 	x_start_draw = scale_and_shift_x_pos(x_start)
+	# 	x_len_draw = scale_x_lenght(x_length)
+	# 	y_start_draw = scale_y_pos(y_pos)
+	# 	y_len_draw = get_y_length
+
+	# 	case type
+	# 	when "exon"
+	# 		this_col = @colors[:exon_default]
+	# 	when "exon-gap"
+	# 		this_col = @colors[:exon_extension]
+	# 	when "intron" 
+	# 		if intron_col.empty? then 
+	# 			this_col = @colors[:intron_default]
+	# 		else
+	# 			# use specified color
+	# 			this_col = intron_col
+	# 		end
+	# 		if this_col.kind_of?(Array) then 
+	# 			# this should never happen
+	# 			this_col = this_col.first
+	# 		end
+	# 	else 
+	# 		this_col = @colors[:intron_extension]
+	# 	end
+	# 	return Painter.box( x_start_draw, y_start_draw, x_len_draw, y_len_draw, this_col )
+	# end
+	# def draw_box_without_scaling_x_pos(x_start, x_length, y_pos, color)
+	# 	y_start_draw = scale_y_pos(y_pos)
+	# 	y_len_draw = get_y_length
+	# 	return Painter.box( x_start, y_start_draw, x_length, y_len_draw, color)
+	# end
 
 	# draws boxes
 	# gets the 'real' positions and scales them down to the actual viewbox
-	def draw_box(x_start, x_length, y_pos, type)
-		x_start_draw = round_pos( scale_and_shift_pos(x_start) )
-		x_len_draw = round_pos( scale_lenght_specification(x_length) )
-		y_start_draw = round_pos( y_pos * @height_per_gene )
-		y_len_draw = round_pos( @height_per_gene * Svg.ratios[:gene_to_space] )
-
-		case type
-		when "exon"
-			this_col = @colors[:exon_default]
-		when "exon-gap"
-			this_col = @colors[:exon_extension]
-		when "intron" 
-			this_col = @colors[:intron_default]
-			if this_col.kind_of?(Array) then 
-# debugger
-puts "welche farbe???"
-				this_col = this_col.first
-			end
-		else 
-			this_col = @colors[:intron_extension]
+	# opts [Hash] {:dont_scale_x [Boolean]} specifies if x position should be scaled
+	def draw_box(x_start, x_length, y_pos, color, opts={})
+		if opts[:dont_scale_x] then 
+			x_start_draw = x_start
+			x_length_draw = x_length
+		else
+			x_start_draw = scale_and_shift_x_pos(x_start)
+			x_length_draw = scale_x_lenght( x_length )
 		end
-		return Painter.box( x_start_draw, y_start_draw, x_len_draw, y_len_draw, this_col )
+		y_start_draw = scale_y_pos(y_pos)
+		y_length = get_y_length
+
+		return Painter.box( x_start_draw, y_start_draw, x_length_draw, y_length, color )
 	end
 
-	def print_text(txt, y_pos)
-		y_pos_draw = round_pos( shift_text_pos( y_pos * @height_per_gene) )
-		return Painter.text(Svg.parameters[:x_pos_genename], y_pos_draw, @font_size, txt)
+	def print_text(txt, x_pos=Svg.parameters[:x_pos_genename], y_pos)
+		y_pos_draw = shift_text_pos( y_pos * @height_per_gene)
+		return Painter.text(x_pos, y_pos_draw, @font_size, txt)
+	end
+
+	# does the actual scaling of x and y positions
+	def draw_line(x_start, x_stop, y_start, y_stop, line_width, color, is_scale_xpos)
+		if is_scale_xpos then 
+			x_start_draw = scale_and_shift_x_pos( x_start )
+			x_stop_draw = scale_and_shift_x_pos( x_stop )
+		else
+			x_start_draw = x_start
+			x_stop_draw = x_stop
+		end
+		y_start_draw = shift_y_pos_line( y_start )
+		y_stop_draw = shift_y_pos_line(y_stop )
+
+		return Painter.line(x_start_draw, y_start_draw, x_stop_draw, y_stop_draw, line_width, color)
+	end
+	# opts [Hash] {:dont_scale_x [Boolean]} specifies if x position should be scaled
+	# opts [Hash] {:type [String]} key of @colors hash 
+	def draw_vertical_line(x_pos, y_start, y_stop, opts={})
+		is_scale_xpos = ! opts[:dont_scale_x]
+		color = @colors[opts[:type]] || @colors[:exon_streched]
+		line_width = get_line_width
+
+		draw_line(x_pos, x_pos, y_start, y_stop, line_width, color, is_scale_xpos)
+	end
+	def draw_horizontal_line(x_start, x_stop, y_pos, opts={})
+		is_scale_xpos = ! opts[:dont_scale_x]
+		color = @colors[opts[:type]] || @colors[:exon_streched]
+		line_width = get_line_width 
+
+		draw_line(x_start, x_stop, y_pos, y_pos, line_width, color, is_scale_xpos)
+	end
+
+	def add_scalebar_to_legend(x_pos_scalebar, y_pos, length_one_nt, text)
+		scalebar = []
+
+		length_bar = 10
+		# number of nucleotides equaling a 10 viewbox units long line
+		n_nt = ((1 / length_one_nt * length_bar)* 1/@scaling_factor).round # cross multiplication to get number of nt per 10 viewbox units and scale them
+		n_nt = Helper.convert_number_to_human_readable_string(n_nt)
+
+		x_pos_text = x_pos_scalebar + length_bar + 0.5 # add 0.5 to add some space between scalebar and the text
+		scalebar << print_text("#{n_nt} #{text}", x_pos_text, y_pos)
+		scalebar << draw_horizontal_line(x_pos_scalebar, length_bar + x_pos_scalebar, y_pos, {dont_scale_x: true}) # "darkgrey")
+
+		y_pos_start_vertical_lines = y_pos - @height_per_gene * 0.1 # 0.1: the line should be centered at y_pos_draw and have a total height of 0.2 * @height_per_gene
+		y_pos_stop_vertical_lines = y_pos + @height_per_gene * 0.1
+
+		scalebar << draw_vertical_line(x_pos_scalebar, y_pos_start_vertical_lines, y_pos_stop_vertical_lines, {dont_scale_x: true})  # color = "darkgrey")
+		scalebar << draw_vertical_line(x_pos_scalebar + length_bar, y_pos_start_vertical_lines, y_pos_stop_vertical_lines, {dont_scale_x: true} )# color = "darkgrey")
+
+		return scalebar
+	end
+
+	def print_legend(y_pos, length_one_nt_exon, length_one_nt_intron)
+
+		box_size = 3 # 3 viewbox units look ok
+		distance_text_to_box = box_size + 0.5 # text should start after the end of the box; add 0.5 to get some additional space
+		x_pos_2nd_col = Svg.parameters[:distance_genename_to_gene]
+		x_pos_3rd_col = x_pos_2nd_col + x_pos_2nd_col + distance_text_to_box
+		x_pos_4rd_col = x_pos_3rd_col + x_pos_2nd_col + distance_text_to_box
+
+		is_default_color_scheme = @colors[:intron].kind_of?(Array) ? false : true
+
+		legend = []
+		legend << draw_horizontal_line(0, Svg.parameters[:total_width], y_pos - @height_per_gene/2, {dont_scale_x: true}) # "black"
+		legend << print_text("Legend", y_pos)
+
+		legend << print_text("Exon", x_pos_2nd_col + distance_text_to_box, y_pos)
+		legend << draw_box(x_pos_2nd_col, box_size, y_pos, @colors[:exon], {dont_scale_x: true}) 
+		legend << print_text("Intron", x_pos_3rd_col + distance_text_to_box, y_pos)
+		# intron colors, draw them all :-)
+		if is_default_color_scheme then 
+			legend << draw_box(x_pos_3rd_col, box_size, y_pos, @colors[:intron], {dont_scale_x: true})
+		else
+			n_colors = @colors[:intron].size
+			width_per_col_and_gap = box_size / n_colors.to_f
+			width_per_col = round_pos(width_per_col_and_gap * 0.8)
+			@colors[:intron].each_with_index do |color, ind|
+				this_x_pos = x_pos_3rd_col + ind * width_per_col_and_gap
+				legend << draw_box(this_x_pos, width_per_col, y_pos, color, {dont_scale_x: true})
+			end
+		end
+
+		legend << add_scalebar_to_legend(x_pos_4rd_col, y_pos, length_one_nt_exon, "bps Exon")
+
+		y_pos += 1
+		legend << print_text("Exon gap", x_pos_2nd_col + distance_text_to_box, y_pos)
+		legend << draw_box(x_pos_2nd_col, box_size, y_pos, @colors[:exon_gap], {dont_scale_x: true})
+
+		if is_default_color_scheme then 
+			legend << print_text("Intron gap", x_pos_3rd_col + distance_text_to_box, y_pos)
+			legend << draw_box(x_pos_3rd_col, box_size, y_pos, @colors[:intron_gap], {dont_scale_x: true})
+
+			legend << add_scalebar_to_legend(x_pos_4rd_col, y_pos, length_one_nt_intron, "bps Intron")
+		end
+
+		return legend
 	end
 
 	def normal_colors
 		# standard color scheme
 		return {
-			exon_default: '#e66101', # "darkorange",
-			exon_extension: '#fdb863', # "sandybrown",
-			intron_default: '#5e3c99', # "mediumpurple",
-			intron_extension: '#b2abd2' # "thistle"
+			exon: '#e66101', # "darkorange",
+			exon_gap: '#fdb863', # "sandybrown",
+			intron: '#5e3c99', # "mediumpurple",
+			intron_gap: '#b2abd2', # "thistle"
+			exon_streched: 'grey'
 		}
 	end
 	def fancy_intron_colors
 		# focus is on common introns
 		# no need for intron_extension, as all introns are displayed by 
 		return {
-			exon_default: "grey",
-			exon_extension: "black",
-			intron_default: ["crimson", "darkred", "mediumturquoise", "teal", 
-				"yellowbreen", "darkgreen", "purple", "goldenrod", 
-				"saddlebrown", "cadetblue"],
-			intron_extension: "white"
+			exon: "darkgrey",
+			exon_gap: "lightgrey",
+			intron: Svg.get_list_of_intron_colors,
+			intron_gap: "white",
+			exon_streched: "black"
 		}
 	end
 	def self.parameters
@@ -114,6 +252,11 @@ puts "welche farbe???"
 		}
 	end
 
+	def self.get_list_of_intron_colors
+		return ["tomato", "firebrick", "mediumturquoise", "teal", 
+				"yellowgreen", "darkgreen", "purple", "goldenrod", 
+				"saddlebrown", "cadetblue"]
+	end
 	def self.get_exon_intron_ratio
 		return ratios[:exons_to_introns]
 	end
@@ -125,12 +268,12 @@ puts "welche farbe???"
 		# actual painting of the SVG
 		extend self
 
-		def line(x1, y1, x2, y2, color)
+		def line(x1, y1, x2, y2, width, color)
 			return "<line x1=\"#{x1}\" "\
 				"y1=\"#{y1}\" "\
 				"x2=\"#{x2}\" "\
 				"y2=\"#{y2}\" "\
-				"stroke=\"#{color}\" "\
+				"stroke=\"#{color}\" stroke-width=\"#{width}\" "\
 				"/>"
 		end
 

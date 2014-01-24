@@ -7,13 +7,14 @@ class Exon
 	def initialize(start, stop)
 		@start_pos_in_dna_seq = start
 		@end_pos_in_dna_seq = stop
-
-		# TODO
-		# also needs: pos_sequence_shifts = [] ?
 	end
 
 	def length_in_nt
 		@end_pos_in_dna_seq - @start_pos_in_dna_seq
+	end
+
+	def length_in_alignment
+		@end_pos_in_aligned_protein - @start_pos_in_aligned_protein
 	end
 
 	def set_variables_describing_exon_in_aligned_seq(aligned_seq)
@@ -21,7 +22,7 @@ class Exon
 			Sequence.sequence_pos2alignment_pos(convert_dna_pos_into_protein_pos(@start_pos_in_dna_seq), aligned_seq)
 		@end_pos_in_aligned_protein = 
 			# the last position must be excluded, it belongs actually to the next exon
-			Sequence.sequence_pos2alignment_pos(convert_dna_pos_into_protein_pos(@end_pos_in_dna_seq), aligned_seq) - 1 
+			Sequence.sequence_pos2alignment_pos(convert_dna_pos_into_protein_pos(@end_pos_in_dna_seq) - 1, aligned_seq)
 	end
 
 	def convert_dna_pos_into_protein_pos(pos_in_dna)

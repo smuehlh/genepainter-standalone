@@ -39,13 +39,14 @@ class Intron
 		return phase
 	end
 
-	def is_phase_valid_but_non_descriptive(phase)
+	def self.is_phase_valid_but_non_descriptive(phase)
 		return phase == "?"
 	end
 
 	def set_variables_describing_intron_in_aligned_seq(aligned_seq)
 		# start and end positions are in nucleotides, aligned sequece consists of amion acids
 		# 3 nucleotides code for 1 amino acid
+		
 		@pos_last_aa_in_aligned_protein_before_intron = 
 			Sequence.sequence_pos2alignment_pos(convert_dna_pos_into_protein_pos(@pos_last_nt_in_dna_seq_before_intron) - 1, aligned_seq) # -1 to make it the _last_ amino acid 
 	end
@@ -57,7 +58,7 @@ class Intron
 	end
 
 	def get_alignmentpos_and_phase
-		return [@pos_last_nt_in_aligned_protein_before_intron, @phase]
+		return [@pos_last_aa_in_aligned_protein_before_intron, @phase]
 	end
 
 end
