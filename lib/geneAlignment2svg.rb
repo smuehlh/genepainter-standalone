@@ -5,6 +5,8 @@ class GeneAlignment2svg
 		@aligned_genes = aligned_genes
 		@svg_size, @is_default_color_scheme = parse_svg_parameters(svg_params)
 
+		@is_most_accurate_output = false # false: much better to understand, although the exon-streches are always at end of featuress
+
 		prepare_genes_for_drawing # sets @all_intronpos_with_maxlength, @max_x_pos_exon, @scaling_factor_introns
 	end
 
@@ -117,13 +119,16 @@ class GeneAlignment2svg
 				exon_endpos_drawing = calc_pos_drawing( exon.end_pos_in_aligned_protein, "exon-ende" )
 				exon_length = exon_endpos_drawing - exon_startpos_drawing
 
-				svg << svg_obj.draw_box( exon_startpos_drawing, exon_length, y_pos, svg_obj.colors[:exon])
-				# exon_pieces_startpos_drawing_with_length = 
-				# 	split_exons_at_foreign_intronpos( exon.start_pos_in_aligned_protein, exon.length_in_alignment )
+				if @is_most_accurate_output then 
+					exon_pieces_startpos_drawing_with_length = 
+						split_exons_at_foreign_intronpos( exon.start_pos_in_aligned_protein, exon.length_in_alignment )
 
-				# exon_pieces_startpos_drawing_with_length.each do |startpos_drawing, length_drawing|
-				# 	svg << svg_obj.draw_box( startpos_drawing, length_drawing, y_pos, svg_obj.colors[:exon] )
-				# end
+					exon_pieces_startpos_drawing_with_length.each do |startpos_drawing, length_drawing|
+						svg << svg_obj.draw_box( startpos_drawing, length_drawing, y_pos, svg_obj.colors[:exon] )
+					end
+				else
+					svg << svg_obj.draw_box( exon_startpos_drawing, exon_length, y_pos, svg_obj.colors[:exon])
+				end
 
 				# intron
 				intron = gene.introns[ind]
@@ -155,23 +160,23 @@ class GeneAlignment2svg
 			# draw gaps
 			# draw them after then exons are drawn, as gaps may be on top of exons
 			# split gaps because of introns in other genes
-			gene.get_all_gaps_in_aligned_seq.each do |pos, len|
+			gene.get_all_gaps_in_aligned_seq_within_range.each do |pos, len|
 				gap_startpos_drawing = calc_pos_drawing( pos, "exon" )
 				gap_endpos_drawing = calc_pos_drawing( pos+len, "exon-ende" )
 				gap_length = gap_endpos_drawing - gap_startpos_drawing
 
-				svg << svg_obj.draw_box( gap_startpos_drawing, gap_length, y_pos, svg_obj.colors[:exon_gap])
+				if @is_most_accurate_output then 
+					gap_pieces_startpos_drawing_with_length = 
+						split_exons_at_foreign_intronpos( pos, len )
 
-				# gap_pieces_startpos_drawing_with_length = 
-				# 	split_exons_at_foreign_intronpos( pos, len )
+					gap_pieces_startpos_drawing_with_length.each do |startpos_drawing, length_drawing|
+						svg << svg_obj.draw_box( startpos_drawing, length_drawing, y_pos, svg_obj.colors[:exon_gap] )
+					end
+				else
+					svg << svg_obj.draw_box( gap_startpos_drawing, gap_length, y_pos, svg_obj.colors[:exon_gap])
+				end
 
-				# gap_pieces_startpos_drawing_with_length.each do |startpos_drawing, length_drawing|
-				# 	svg << svg_obj.draw_box( startpos_drawing, length_drawing, y_pos, svg_obj.colors[:exon_gap] )
-				# end
 			end
-
-		# TODO 
-		# 5) artifical gap am ende statt mittendrin in feature; - als cmd-line option?
 
 		end
 

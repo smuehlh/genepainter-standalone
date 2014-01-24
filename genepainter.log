@@ -1,4 +1,4 @@
-Logfile created on 2014-01-24 11:29:05 +0100 by GenePainter
-Program call: -i example/coronin_alignment.fas -p example/coronin_genes/ --svg 100,100 --svg-format reduced
+Logfile created on 2014-01-24 14:26:57 +0100 by GenePainter
+Program call: -i example/coronin_alignment.fas -p example/coronin_genes/ --range -o range 1,200
 
 Used BrCoro1A, HsCoro1A, HsCoro1B, HsCoro1C, GgCoro1C, BrCoro1Cbeta, BrCoro1D, HsCoro1D, BrCoro1E, DmCoro1, AngCoro1, CeCoro1, BrCoro2A, HsCoro2A, GgCoro2A, XtCoro2A, BrCoro2B, HsCoro2B, XtCoro2B, BrCoro2C, BrCoro2D, AngCoro2, Pf_aCoro, EnCoro, AecCoro, SpCoro for computation.

@@ -2,9 +2,6 @@
 class GeneAlignment
 	attr_reader :exon_placeholder, :intron_placeholder
 
-# TODO logoutput
-# TODO rewrite check for consensus/merged pattern in export_...
-
 	## output parameter definition 
 	def self.max_length_gene_name
 		return 20
@@ -54,8 +51,7 @@ class GeneAlignment
 		intronphase_per_pos = Hash.new( 0 )
 
 		@genes.each_with_index do |gene, ind|
-			exon_intron_pattern = gene.plot_intron_phases_onto_aligned_seq(@exon_placeholder, @intron_placeholder)
-			patterns[ind] = exon_intron_pattern
+			patterns[ind] = gene.plot_intron_phases_onto_aligned_seq(@exon_placeholder, @intron_placeholder)
 
 			update_count_of_number_introns_per_pos(n_introns_per_pos, intronphase_per_pos, gene)
 		end
@@ -105,7 +101,6 @@ class GeneAlignment
 			merged_pattern[intronpos] = intronphase
 		end
 		return merged_pattern
-
 	end
 	def get_empty_pattern(len)
 		return @exon_placeholder * len
@@ -116,9 +111,8 @@ class GeneAlignment
 		# important: duplicate the pattern ! 
 		patterns = @aligned_genestructures.map {|ele| ele.dup}
 		Sequence.remove_common_gaps(patterns,
-			false, # input is not an fasta-formatted alignment
-			0, # offset to start searching for common gaps
-			@exon_placeholder # placeholder for exons
+			{is_alignment: false, # input is not fasta-formatted alignment
+			gap_symbol: @exon_placeholder} # use placeholder as gap-symbol
 			)
 	end
 
@@ -153,29 +147,25 @@ class GeneAlignment
 	end
 
 	def export_as_alignment_with_introns
-		# output contains sequence and structure for each gene
+		# output contains sequence and structure for each gene, but no sequence for merged/conserved structure
 		output = Array.new(@genes.size + @n_structures)
 
-		@genes.each_with_index do |gene, ind|
-			gene_struct = @aligned_genestructures[ind]
+		@aligned_genestructures.each_with_index do |struct, ind|
 
-			index_output_seq = ind * 2
-			index_output_struct = index_output_seq + 1
+			index_output_struct = ind * 2 + 1
+			if ind == @ind_merged_pattern then 
+				name_struct = self.class.merged_structure_name
+			elsif ind == @ind_consensus_pattern
+				name_struct = self.class.consensus_structure_name
+			else
+				# its the structure of a @aligned_gene
+				index_output_seq = ind * 2
+				gene = @genes[ind]
+				output[index_output_seq] = Sequence.convert_strings_to_fasta(gene.name, gene.get_aligned_seq_within_range)
+				name_struct = gene.name + self.class.suffix_structure_in_alignment
+			end 
 
-			output[index_output_seq] = 
-				Sequence.convert_strings_to_fasta(gene.name, gene.get_aligned_seq_within_range)
-			output[index_output_struct] = 
-				Sequence.convert_strings_to_fasta(gene.name + self.class.suffix_structure_in_alignment, gene_struct)
-
-		end
-		# add merged and consensus pattern
-		if @ind_consensus_pattern then 
-			output[ @genes.size + @ind_consensus_pattern ] = 
-				Sequence.convert_strings_to_fasta( self.class.consensus_structure_name , @aligned_genestructures[@ind_consensus_pattern] )
-		end
-		if @ind_merged_pattern then 
-			output[ @genes.size + @ind_merged_pattern ] = 
-				Sequence.convert_strings_to_fasta( self.class.merged_structure_name , @aligned_genestructures[@ind_merged_pattern] )
+			output[index_output_struct] = Sequence.convert_strings_to_fasta(name_struct, struct)
 		end
 
 		return output.join("\n")
@@ -188,30 +178,18 @@ class GeneAlignment
 		exon_placeholder_output = "0"
 		intron_placeholder_output = "1"
 
-		@genes.each_with_index do |gene, ind|
-			gene_struct = @reduced_aligned_genestructures[ind]
-			struct = replace_exon_intron_placeholders_in_structure(gene_struct, exon_placeholder_output, intron_placeholder_output)
+		@reduced_aligned_genestructures.each_with_index do |struct, ind|
+			if ind == @ind_merged_pattern then 
+				name = self.class.merged_structure_name
+			elsif ind == @ind_consensus_pattern 
+				name = self.class.consensus_structure_name
+			else
+				# its a gene
+				name = @genes[ind].name
+			end
+			struct = replace_exon_intron_placeholders_in_structure(struct, exon_placeholder_output, intron_placeholder_output)
 
-			output[ind] = 
-				Sequence.convert_strings_to_fasta( gene.name, struct )
-		end
-
-		# add merged and consensus pattern
-		if @ind_consensus_pattern then 
-			struct = replace_exon_intron_placeholders_in_structure(
-				@reduced_aligned_genestructures[@ind_consensus_pattern],
-				exon_placeholder_output, intron_placeholder_output
-				)
-			output[ @ind_consensus_pattern ] = 
-				Sequence.convert_strings_to_fasta( self.class.consensus_structure_name, struct )
-		end
-		if @ind_merged_pattern then 
-			struct = replace_exon_intron_placeholders_in_structure(
-				@reduced_aligned_genestructures[@ind_merged_pattern],
-				exon_placeholder_output, intron_placeholder_output
-				)
-			output[ @ind_merged_pattern ] = 
-				Sequence.convert_strings_to_fasta( self.class.merged_structure_name, struct )
+			output[ind] = Sequence.convert_strings_to_fasta( name, struct )		
 		end
 
 		return output.join("\n")
@@ -221,30 +199,21 @@ class GeneAlignment
 	
 		output = Array.new(@n_structures)
 
-		@genes.each_with_index do |gene, ind|
-			gene_struct = @reduced_aligned_genestructures[ind]
-			name = convert_string_to_chopped_fasta_header( gene.name )
-			struct = replace_exon_intron_placeholders_in_structure(gene_struct, exon_placeholder_output, intron_placeholder_output)
+		@reduced_aligned_genestructures.each_with_index do |struct, ind|
+			if ind == @ind_merged_pattern then 
+				name = self.class.merged_structure_name
+			elsif ind == @ind_consensus_pattern
+				name = self.class.consensus_structure_name
+			else
+				# its a gene
+				name = @genes[ind].name
+			end
 
-			output[ind] = [ name, struct ].join("")
-		end
+			name = convert_string_to_chopped_fasta_header ( name )
+			struct = replace_exon_intron_placeholders_in_structure( struct, exon_placeholder_output, intron_placeholder_output )
 
-		# add merged and consensus pattern
-		if @ind_consensus_pattern then 
-			struct = replace_exon_intron_placeholders_in_structure(
-				@reduced_aligned_genestructures[@ind_consensus_pattern],
-				exon_placeholder_output, intron_placeholder_output
-				)
-			name = convert_string_to_chopped_fasta_header( self.class.consensus_structure_name )
-			output[ @ind_consensus_pattern ] = [ name, struct ].join("")
-		end
-		if @ind_merged_pattern then 
-			struct = replace_exon_intron_placeholders_in_structure(
-				@reduced_aligned_genestructures[@ind_merged_pattern],
-				exon_placeholder_output, intron_placeholder_output
-				)
-			name = convert_string_to_chopped_fasta_header( self.class.merged_structure_name )
-			output[ @ind_merged_pattern ] = [ name, struct ].join("")
+			output[ind] = [name, struct].join("")
+					
 		end
 
 		return output.join("\n")
@@ -256,7 +225,6 @@ class GeneAlignment
 
 		# draw genes
 		output = genealignment2svg_obj.create_svg
-puts output
 		
 		return output
 	end
@@ -289,7 +257,7 @@ puts output
 		end
 
 		ref_gene = @genes[ind_of_ref_seq]
-		ref_seq = ref_gene.aligned_seq
+		ref_seq = ref_gene.get_aligned_seq_within_range
 
 		# get gene structure
 		if options[:pdb_ref_prot_struct_only]
@@ -307,7 +275,8 @@ puts output
 			end
 		end
 		ref_struct = @aligned_genestructures[ind_ref_struct]
-
+puts ref_seq
+puts ref_struct
 		genealignment2pdb_obj = GeneAlignment2pdb.new( ref_seq, ref_struct, options )
 
 		# plot gene structures onto pdb

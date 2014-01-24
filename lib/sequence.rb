@@ -51,16 +51,6 @@ module Sequence
 		return names, seqs
 	end
 
-	def convert_fasta_array_back_to_arrays_of_names_and_seqs(fasta)
-		names, seqs = [], []
-		fasta.each do |rec|
-			parts = rec.split("\n")
-			names << parts[0]
-			seqs << parts[1..-1].join("")
-		end
-		return names, seqs
-	end
-
 	def convert_strings_to_fasta(fasta_header, fasta_seq)
 		fasta_arr = []
 
@@ -110,7 +100,14 @@ module Sequence
 	# input "seqs" _must be_ of same length
 	# in case of alignment, all common gaps are removed
 	# in case of exon_intron_pattern, only those gaps are removed, where the next column also contains only common gaps
-	def remove_common_gaps(seqs, is_alignment=true, start_col=0, gap_symbol="-")
+	# opts [Hash] Boolean is_alignment -> default: false
+	# opts [Hash] Integer start_col -> default: 0
+	# opts [Hash] String gap_symbol -> default: "-"
+	def remove_common_gaps(seqs, opts = {})
+		# set options or default params
+		is_alignment = opts[:is_alignment] || false
+		start_col = opts[:start_col] || 0
+		gap_symbol = opts[:gap_symbol] || "-"
 
 		last_col = seqs.collect { |s| s.size }.max
 

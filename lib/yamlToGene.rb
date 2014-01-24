@@ -76,7 +76,6 @@ class YamlToGene
 		return pos, phase
 	end
 
-	# TODO delete unneccessary methods
 	### methods from webscipio
 
 	def <=>(other)

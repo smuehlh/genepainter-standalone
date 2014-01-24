@@ -114,9 +114,9 @@ class OptParser
 			end
 			svg_formats = ["normal", "reduced"]
 			opts.on("--svg-format FORMAT", svg_formats,
-				"	FORMAT: #{svg_formats}",
-				"	'normal' draws details of aligned exons and introns [default]",
-				"	'reduced' focuses on common introns only") do |f|
+				"FORMAT: #{svg_formats}",
+				"'normal' draws details of aligned exons and introns [default]",
+				"'reduced' focuses on common introns only") do |f|
 				if f == "reduced" then
 					vivify_hash(options, :svg_options, :reduced, true)
 				else
@@ -165,7 +165,7 @@ class OptParser
 			opts.separator "Meta information and statistics:"
 			opts.on("--consensus N", Float, 
 				"Introns conserved in N % genes.", 
-				"	Specify N as decimal number between 0 and 1") do |n|
+				"Specify N as decimal number between 0 and 1") do |n|
 				if 0 < n && n <= 1.0 then
 					options[:consensus] = n
 				else
@@ -185,8 +185,8 @@ class OptParser
 			end
 
 			opts.on("--range <start-stop[,start-stop,...]>", Array,
-				"Comma-separated list (without blanks) of alignment ranges.",
-				"	Keyword 'end' for last alignment position can be used") do |range_list|
+				"Comma-separated list (without blanks) of alignment ranges of format start-stop.",
+				"Keyword 'end' for last alignment position can be used") do |range_list|
 
 				parsed_list = []
 				last_r_stop = nil
@@ -206,8 +206,10 @@ class OptParser
 						else
 							r_stop = splitted_parts[1].to_i - 1 # convert from human to ruby counting
 						end
-
-						if r_start >= r_stop && r_stop != -1 then
+						if r_start < 0 || r_stop < 0 then 
+							Helper.abort("invalid range definition in #{range}: start and stop must be natural numbers")
+						end
+						if r_start >= r_stop then
 							# invalid syntax, start must be before stop
 							Helper.abort("invalid range definition in #{range}: start must be lower than stop")
 						elsif last_r_stop && r_start <= last_r_stop 
