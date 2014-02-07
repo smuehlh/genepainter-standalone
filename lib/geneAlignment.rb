@@ -15,6 +15,9 @@ class GeneAlignment
 	def self.consensus_structure_name
 		return "Consensus"
 	end
+	def self.taxonomy_structure_name
+		return "Taxonomy"
+	end
 
 	## end output parameter definition
 
@@ -22,7 +25,8 @@ class GeneAlignment
 	# Array genes: gene objects, must have an aligned sequence
 	# Float or false: calculate a consensus pattern (conserved in val sequences)
 	# Boolean: calculate a merged pattern
-	def initialize(genes, consensus_val, is_merged_pattern)
+	# Hash taxonomy_options: genes_within_taxa: Array [subset of gene.names (belong to genes objects)], is_exclusive: Boolean [introns exclusive for selected taxa]
+	def initialize(genes, consensus_val, is_merged_pattern, taxonomy_options)
 		# @aligned_genes = detect_conserved_introns(genes)
 		@genes = genes
 
@@ -31,9 +35,10 @@ class GeneAlignment
 
 		@ind_consensus_pattern = nil
 		@ind_merged_pattern = nil
+		@ind_tax_pattern = nil
 		
-		# convert_to_exon_intron_pattern overwrites also @ind_consensus_pattern, @ind_merged_pattern if neccessary
-		@aligned_genestructures = convert_to_exon_intron_pattern(consensus_val, is_merged_pattern) # are of same order as @genes !!!
+		# convert_to_exon_intron_pattern overwrites also @ind_consensus_pattern, @ind_merged_pattern, @ind_tax_pattern if neccessary
+		@aligned_genestructures = convert_to_exon_intron_pattern(consensus_val, is_merged_pattern, taxonomy_options) # are of same order as @genes !!!
 		@reduced_aligned_genestructures = reduce_exon_intron_pattern # reduce gene structures to "needed" parts 
 
 		@n_structures = @aligned_genestructures.size
@@ -43,17 +48,23 @@ class GeneAlignment
 	# exon representation: "-", intron representation: phase
 	# output
 	# Array of strings: exon intron pattern plotted onto the aligned sequence
-	def convert_to_exon_intron_pattern(consensus_val, is_merged_pattern)
+	def convert_to_exon_intron_pattern(consensus_val, is_merged_pattern, taxonomy_options)
 		# collect the exon_intron_patterns of each gene, also for merged/consensus
 		patterns = Array.new(@genes.size)
 
 		n_introns_per_pos = Hash.new( 0 )
 		intronphase_per_pos = Hash.new( 0 )
+		n_introns_per_pos_selected_taxa = Hash.new( 0 )
+
+		# parse taxonomy input
+		genes_within_selected_taxa = taxonomy_options[:genes_within_taxa] || []
+		is_intron_exclusive_for_taxa = taxonomy_options[:is_exclusive]
 
 		@genes.each_with_index do |gene, ind|
 			patterns[ind] = gene.plot_intron_phases_onto_aligned_seq(@exon_placeholder, @intron_placeholder)
 
 			update_count_of_number_introns_per_pos(n_introns_per_pos, intronphase_per_pos, gene)
+			update_intronpos_within_selected_taxa(n_introns_per_pos_selected_taxa, gene, genes_within_selected_taxa)
 		end
 
 		if consensus_val then 
@@ -66,6 +77,12 @@ class GeneAlignment
 			pattern_length = patterns[0].size
 			patterns << generate_merged_profile(intronphase_per_pos, pattern_length)
 			@ind_merged_pattern = patterns.size - 1 # indices start with 0
+		end
+		if genes_within_selected_taxa.any? then
+			pattern_length = patterns[0].size
+			patterns << generate_taxonomy_pattern(n_introns_per_pos_selected_taxa, n_introns_per_pos, intronphase_per_pos, 
+				pattern_length, is_intron_exclusive_for_taxa)
+			@ind_tax_pattern = patterns.size - 1 # indices start with 0
 		end
 
 		return patterns
@@ -81,7 +98,6 @@ class GeneAlignment
 			counts[pos] += 1
 			phases[pos] = phase
 		end
-		return counts, phases
 	end
 	def generate_consensus_profile(counts, phases, min_n_introns, pattern_length)
 		consensus_pattern = get_empty_pattern(pattern_length)
@@ -106,6 +122,32 @@ class GeneAlignment
 		return @exon_placeholder * len
 	end
 	# end methods for "statistics"
+
+	# methods for "taxonomy: reduce exon-intron pattern to introns within selected taxa"
+	def update_intronpos_within_selected_taxa(counts, gene, selected_genes)
+		if selected_genes.include?(gene.name) then 
+			# collect introns
+			intronpos = gene.get_all_intronpositions
+			intronpos.each do |pos|
+				counts[pos] += 1
+			end
+		end
+	end
+	def generate_taxonomy_pattern(counts_wanted, counts_all, phases, pattern_length, is_exclusive)
+		# counts_wanted: intron pos and number of selected genes
+		# counts_all: intron pos and number of all genes
+		# is_exclusive: switches between printing introns exclusive for selected taxa and all introns occuring in selected taxa
+		# if intron is exclusive for selected genes: occurs nowhere else
+		tax_pattern = get_empty_pattern(pattern_length)
+		counts_wanted.each do |intronpos, intronnum|
+			if is_exclusive && intronnum != counts_all[intronpos] then 
+				next
+			end
+			tax_pattern[intronpos] = phases[intronpos]
+		end
+		return tax_pattern
+	end
+	# end methods for "taxonomy"
 
 	def reduce_exon_intron_pattern
 		# important: duplicate the pattern ! 
@@ -157,11 +199,13 @@ class GeneAlignment
 				name_struct = self.class.merged_structure_name
 			elsif ind == @ind_consensus_pattern
 				name_struct = self.class.consensus_structure_name
+			elsif ind == @ind_tax_pattern
+				name_struct = self.class.taxonomy_structure_name
 			else
 				# its the structure of a @aligned_gene
 				index_output_seq = ind * 2
 				gene = @genes[ind]
-				output[index_output_seq] = Sequence.convert_strings_to_fasta(gene.name, gene.get_aligned_seq_within_range)
+				output[index_output_seq] = Sequence.convert_strings_to_fasta(gene.name, gene.aligned_seq)
 				name_struct = gene.name + self.class.suffix_structure_in_alignment
 			end 
 
@@ -183,6 +227,8 @@ class GeneAlignment
 				name = self.class.merged_structure_name
 			elsif ind == @ind_consensus_pattern 
 				name = self.class.consensus_structure_name
+			elsif ind == @ind_tax_pattern
+				name = self.class.taxonomy_structure_name
 			else
 				# its a gene
 				name = @genes[ind].name
@@ -204,6 +250,8 @@ class GeneAlignment
 				name = self.class.merged_structure_name
 			elsif ind == @ind_consensus_pattern
 				name = self.class.consensus_structure_name
+			elsif ind == @ind_tax_pattern
+				name = self.class.taxonomy_structure_name
 			else
 				# its a gene
 				name = @genes[ind].name
@@ -257,7 +305,7 @@ class GeneAlignment
 		end
 
 		ref_gene = @genes[ind_of_ref_seq]
-		ref_seq = ref_gene.get_aligned_seq_within_range
+		ref_seq = ref_gene.aligned_seq
 
 		# get gene structure
 		if options[:pdb_ref_prot_struct_only]
@@ -273,10 +321,12 @@ class GeneAlignment
 			if @ind_consensus_pattern then 
 				ind_ref_struct = @ind_consensus_pattern
 			end
+			if @ind_tax_pattern then 
+				ind_ref_struct = @ind_tax_pattern
+			end
 		end
 		ref_struct = @aligned_genestructures[ind_ref_struct]
-puts ref_seq
-puts ref_struct
+
 		genealignment2pdb_obj = GeneAlignment2pdb.new( ref_seq, ref_struct, options )
 
 		# plot gene structures onto pdb

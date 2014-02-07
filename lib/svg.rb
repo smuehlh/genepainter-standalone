@@ -49,49 +49,19 @@ class Svg
 	end
 	def shift_y_pos_line(pos)
 		# shift y_pos (is upper left corner) towards center of a box
-		round_pos( (pos * @height_per_gene) + (@height_per_gene / 2) )
+		round_pos( (pos * @height_per_gene) + (@height_per_gene - get_line_width) / 2 )
+	end
+	def shift_y_pos_small_box(pos, ratio)
+		round_pos( pos * @height_per_gene + ((@height_per_gene - @height_per_gene * ratio)/2) )
 	end
 	def get_line_width 
 		round_pos( @height_per_gene * 0.1 )
 	end
 
-
-	# def alt_draw_box(x_start, x_length, y_pos, type, intron_col="")
-	# 	x_start_draw = scale_and_shift_x_pos(x_start)
-	# 	x_len_draw = scale_x_lenght(x_length)
-	# 	y_start_draw = scale_y_pos(y_pos)
-	# 	y_len_draw = get_y_length
-
-	# 	case type
-	# 	when "exon"
-	# 		this_col = @colors[:exon_default]
-	# 	when "exon-gap"
-	# 		this_col = @colors[:exon_extension]
-	# 	when "intron" 
-	# 		if intron_col.empty? then 
-	# 			this_col = @colors[:intron_default]
-	# 		else
-	# 			# use specified color
-	# 			this_col = intron_col
-	# 		end
-	# 		if this_col.kind_of?(Array) then 
-	# 			# this should never happen
-	# 			this_col = this_col.first
-	# 		end
-	# 	else 
-	# 		this_col = @colors[:intron_extension]
-	# 	end
-	# 	return Painter.box( x_start_draw, y_start_draw, x_len_draw, y_len_draw, this_col )
-	# end
-	# def draw_box_without_scaling_x_pos(x_start, x_length, y_pos, color)
-	# 	y_start_draw = scale_y_pos(y_pos)
-	# 	y_len_draw = get_y_length
-	# 	return Painter.box( x_start, y_start_draw, x_length, y_len_draw, color)
-	# end
-
 	# draws boxes
 	# gets the 'real' positions and scales them down to the actual viewbox
 	# opts [Hash] {:dont_scale_x [Boolean]} specifies if x position should be scaled
+	# opts [Hash] {:draw_smaller_box [Boolean]} specifies if box height should be smaller than usual 
 	def draw_box(x_start, x_length, y_pos, color, opts={})
 		if opts[:dont_scale_x] then 
 			x_start_draw = x_start
@@ -100,8 +70,15 @@ class Svg
 			x_start_draw = scale_and_shift_x_pos(x_start)
 			x_length_draw = scale_x_lenght( x_length )
 		end
-		y_start_draw = scale_y_pos(y_pos)
-		y_length = get_y_length
+		if opts[:draw_smaller_box] then 
+			# box height is smaller than usual box height
+			ratio_smaller_normal_height = 0.7
+			y_start_draw = shift_y_pos_small_box(y_pos, ratio_smaller_normal_height)
+			y_length = get_y_length * ratio_smaller_normal_height
+		else
+			y_start_draw = scale_y_pos(y_pos)
+			y_length = get_y_length
+		end
 
 		return Painter.box( x_start_draw, y_start_draw, x_length_draw, y_length, color )
 	end

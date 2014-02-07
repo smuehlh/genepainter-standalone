@@ -4,7 +4,7 @@ class Intron
 	# properties which cannot be set at initialization
 		# pos mapped onto aligned protein sequence, but still in nucleoides instead of amino acids
 		:pos_last_aa_in_aligned_protein_before_intron 
-	attr_accessor :is_conserved # true if any other intron is at same position in same phase
+	# attr_accessor :is_conserved # true if any other intron is at same position in same phase
 
 	def initialize(pos, length, phase)
 		@pos_last_nt_in_dna_seq_before_intron = pos
@@ -61,4 +61,17 @@ class Intron
 		return [@pos_last_aa_in_aligned_protein_before_intron, @phase]
 	end
 
+
+	# fit gene into range
+	# input: n_del_nt: number of nucleotides deleted (in comparision to position of this intron)
+	# input: aligned_seq: alignded sequence within range
+	def create_copy_with_shifted_positions(n_del_nt, aligned_seq)
+		copy = Intron.new(
+			@pos_last_nt_in_dna_seq_before_intron - n_del_nt,
+			@n_nucleotides,
+			@phase
+		)
+		copy.set_variables_describing_intron_in_aligned_seq(aligned_seq)
+		return copy
+	end
 end

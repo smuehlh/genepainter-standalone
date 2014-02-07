@@ -31,24 +31,15 @@ class OptParser
 		options[:path_to_log] = "genepainter.log" # log file
 
 		options[:output_format_list] = ["txt_simple"] # which output should be generated
-		options[:range] = nil # restrict input alignment: use only "columns" within range
+		options[:range] = [] # restrict input alignment: use only "columns" within range
 		options[:ignore_common_gaps] = false # restrict input alignment: ignore gaps common to all sequences
 		options[:consensus] = false # add consenus profile to output ?
 		options[:merge] = false # add merged profile to output ?
 
 		options[:svg_options] = {} # options for svg output, only set if svg_output is requested
 		options[:pdb_options] = {} # options for pdb output, only set if pdb_output is requested
+		options[:tax_options] = {} # options for taxonomy output, only set if taxonomy is requested
 
-		# a list of all possible output formats
-		# possible_output_formats = [
-		# 	"txt_simple", # plain text, exons => "-", introns => "|"
-		# 	"txt_intron_phases", # plain text, exons => "-", introns => "[0|1|2|?]"
-		# 	"txt_only_introns", # plain text, exons => " ", introns => "|"
-		# 	"txt_phylo", # plain text, exons => "0", introns => "1"
-		# 	"alignment_with_intron_phases", # fasta-formatted alignment with additional for every sequence containing intron phases
-		# 	"svg_focus_on_exons_and_introns", # svg, aligned exons and introns shown
-		# 	"svg_focus_on_common_introns" # svg, conserved introns drawn in same colour
-		# ]
 
 		opt_parser = OptionParser.new do |opts|
 
@@ -146,20 +137,10 @@ class OptParser
 				"[Default: First protein in alignment]") do |n|
 				vivify_hash(options, :pdb_options, :pdb_reference_protein, n)
 			end
-# opts.on("--pdb-force-alignment",
-#        "Force alignment between pdb and reference protein", 
-#        "Without this options set, alignment score > 70% is required for mapping." ) do |opt|
-# 	vivify_hash(options, :pdb, :pdb_force_alignment, true)
-# end
 			opts.on("--pdb-ref-prot-struct",
 				"Color only intron positions occuring in the reference protein structure.") do |opt|
 				vivify_hash(options, :pdb_options, :pdb_ref_prot_struct_only, true)
 			end
-# opts.on("--pdb-penalize-endgaps", 
-# 	"Penalize gaps at end of the alignment (standard Needleman-Wunsch algorithm)", 
-# 	"[Default: Gaps at alignment ends are not penalized.]") do |opt|
-# 	vivify_hash(options, :pdb, :pdb_penalize_endgaps, true)
-# end
 
 			opts.separator ""
 			opts.separator "Meta information and statistics:"
@@ -177,6 +158,32 @@ class OptParser
 			end
 
 			opts.separator ""
+			opts.separator "Phylogeny:"
+			opts.on("--taxonomy FILE", String,
+				"Mark introns by taxonomy",
+				"NCBI taxonomy database dump file FILE") do |file|
+				options[:output_format_list] << "tax"
+				vivify_hash(options, :tax_options, :path_to_tax, file)
+				Helper.file_exist_or_die(file)
+			end
+			opts.on("--taxonomy-to-fasta FILE", String,
+				"Text-based file mapping fasta header to species names", 
+				"Gene1[,Gene2]:Species") do |file|
+				vivify_hash(options, :tax_options, :path_to_tax_mapping, file)
+				Helper.file_exist_or_die(file)
+			end
+			opts.on("--taxonomy-common-to x,y,z", Array, 
+				"Mark introns common to taxa x,y,z", 
+				"List can consist of one taxon only") do |list|
+				list = list.map {|str| str.capitalize}
+				vivify_hash(options, :tax_options, :selected_taxa, list)
+			end
+			opts.on("--[no-]exclusively-in-taxa", 
+				"Mark introns occuring (not) exclusivley in listed taxa") do |opt|
+				vivify_hash(options, :tax_options, :is_exclusive, opt)
+			end
+
+			opts.separator ""
 			opts.separator "General options:"
 			opts.on("-o", "--outfile <file_name>", String, 
 				"Name of the output file") do |file|
@@ -184,48 +191,29 @@ class OptParser
 				options[:path_to_log] = options[:path_to_output] + ".log"
 			end
 
-			opts.on("--range <start-stop[,start-stop,...]>", Array,
-				"Comma-separated list (without blanks) of alignment ranges of format start-stop.",
-				"Keyword 'end' for last alignment position can be used") do |range_list|
+			opts.on("--range START,STOP", Array,
+				"Restrict genes to range START-STOP in alignment") do |range|
+				range = range.map(&:to_i)
 
-				parsed_list = []
-				last_r_stop = nil
-				# sorting the range_list according to starting positions as kind of user-service
-				range_list.sort.each do |range|
-					range = range.strip
-					splitted_parts = range.split("-")
-					if splitted_parts.size != 2 then
-						# invalid syntax used for range definition: cannot parse it
-						Helper.abort("invalid range definition in #{range}: start and stop must be separated by '-'")
-					else
-						# syntax was ok, check for content
-						r_start = splitted_parts[0].to_i - 1 # convert from human to ruby counting
-						# set r_stop to Infinity if end of range should cover alignment till end
-						if range.match(/end/) then
-							r_stop = Float::INFINITY
-						else
-							r_stop = splitted_parts[1].to_i - 1 # convert from human to ruby counting
-						end
-						if r_start < 0 || r_stop < 0 then 
-							Helper.abort("invalid range definition in #{range}: start and stop must be natural numbers")
-						end
-						if r_start >= r_stop then
-							# invalid syntax, start must be before stop
-							Helper.abort("invalid range definition in #{range}: start must be lower than stop")
-						elsif last_r_stop && r_start <= last_r_stop 
-							# invalid syntax: ranges are overlapping
-							Helper.abort("invalid range definition in #{range_list}: overlapping ranges")
-						else
-							# valid syntax
-							last_r_stop = r_stop
-							# but: don't store r_stop as Infinity
-							# this value is really cool for validity checking and really bad for index-based string access
-							r_stop = -1 if r_stop == Float::INFINITY
-							parsed_list << [r_start, r_stop]	
-						end
-					end
+				# sanity check
+				# range should be 2 natural numbers
+				if range.size != 2 || range.inject(:*) == 0 then
+					# number of args wrong or at least one is zero
+					Helper.abort "Invalid argument: --range expects two comma-separated numbers without spaces"
 				end
-				options[:range] = parsed_list
+				# range_start should be smaller than r_stop
+				if range[0] >= range[1] then 
+					Helper.abort "invalid range definition in #{range}: start must be less than than stop"
+				end
+				# _end sanity check
+				options[:range]= {
+					position: [ Helper.human2ruby_counting(range[0]), Helper.human2ruby_counting(range[1]) ], is_delete_range: false
+					}
+			end
+
+			opts.on("--[no-]delete-range", 
+				"(Not) Delete specified range") do |opt|
+				vivify_hash(options, :range, :is_delete_range, opt)
 			end
 
 			opts.on("--ignore-common-gaps", 
@@ -267,7 +255,17 @@ class OptParser
 				options[:consensus] || 
 				options[:pdb_options][:pdb_ref_prot_struct_only] ) then
 
-			Helper.abort "Mandatory argument for --pdb is missing: Specify --consensus N, --merge or --pdb-ref-prot-struct"
+				Helper.abort "Mandatory argument for --pdb is missing: Specify --consensus N, --merge or --pdb-ref-prot-struct"
+			end
+		end
+		# if taxonomy should be considered, need taxonomy dump file, mapping fasta to tax file and list of taxa
+		if options[:output_format_list].include?("tax") then
+			if ! (
+				options[:tax_options][:path_to_tax] &&
+				options[:tax_options][:path_to_tax_mapping] &&
+				options[:tax_options][:selected_taxa] ) then
+
+				Helper.abort "Mandatory argument fo --taxonomy is missing: Specify --taxonomy FILE, --taxonomy-to-fasta FILE and --taxonomy-common-to x,y,z"
 			end
 		end
 

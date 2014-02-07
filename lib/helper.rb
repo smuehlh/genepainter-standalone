@@ -33,6 +33,10 @@ module Helper
 		end
 	end
 
+	def file_exist?(path)
+		FileTest.file?(path)
+	end
+
 	# inform which data are not used
 	def print_intersect_and_diff_between_alignment_and_gene(alignment_names, gene_names)
 		common = alignment_names & gene_names
@@ -49,8 +53,15 @@ module Helper
 
 		# write to log file which seqs and genes exactly are used
 		log ""
-		log "Used #{common.join(", ")} for computation."
+		log "Used #{common.join(", ")} genes for computation."
 
+	end
+
+	# inform which data are used for taxonomy-restricted data set
+	def print_genes_within_taxa(genes_within_taxa, selected_taxa)
+		puts "Genes belonging to selected taxa #{selected_taxa.join(", ")}: #{genes_within_taxa.join(", ")}."
+		log ""
+		log "Taxonomy: Used #{genes_within_taxa.size} genes for computation."
 	end
 
 	# sub_str can be either a string or a regex
@@ -73,6 +84,9 @@ module Helper
 
 	def ruby2human_counting(num)
 		num + 1
+	end
+	def human2ruby_counting(num)
+		num - 1
 	end
 end
 

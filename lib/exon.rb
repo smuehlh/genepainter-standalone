@@ -33,4 +33,19 @@ class Exon
 		(pos_in_dna/3.0).round
 	end
 
+
+	# fit gene into range
+	# input: n_del_nt: number of nucleotides deleted (in comparision to position of this exon)
+	# input: start_pos_nt: start position in dna sequence [ignored if nil]
+	# input: end_pos_nt: end position in dna sequence [ignored if nil]
+	# input: aligned_seq: alignded sequence within range
+	def create_copy_with_shifted_positions(n_del_nt, start_in_dna, end_in_dna, aligned_seq)
+		copy = Exon.new(
+			start_in_dna || @start_pos_in_dna_seq - n_del_nt, # start position, reuse start of this exon if possible
+			end_in_dna || @end_pos_in_dna_seq - n_del_nt # end position, reuse end of this exon if possible
+			)
+		copy.set_variables_describing_exon_in_aligned_seq(aligned_seq)
+		return copy
+	end
+
 end

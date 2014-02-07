@@ -28,13 +28,15 @@ module Sequence
 		return seq.gsub(/[^A-Z*-]/i, "X")
 	end
 
+	# read in alignment, splits file into fasta headers and sequences
+	# removes any species names from fasta headers and returns them separately
 	def read_in_alignment(path)
 		names, seqs = [], []
 		IO.foreach(path) do |line|
 			line.chomp!
 			if line.start_with? ">" then
 				# fasta header
-				names << line[1..-1] 
+				names << line[1..-1]
 			else
 				# fasta sequence
 				n_seqs = names.size

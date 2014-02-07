@@ -5,7 +5,7 @@ class GeneAlignment2svg
 		@aligned_genes = aligned_genes
 		@svg_size, @is_default_color_scheme = parse_svg_parameters(svg_params)
 
-		@is_most_accurate_output = false # false: much better to understand, although the exon-streches are always at end of featuress
+		@is_most_accurate_output = true # false: much better to understand, although the exon-streches are always at end of featuress
 
 		prepare_genes_for_drawing # sets @all_intronpos_with_maxlength, @max_x_pos_exon, @scaling_factor_introns
 	end
@@ -122,7 +122,6 @@ class GeneAlignment2svg
 				if @is_most_accurate_output then 
 					exon_pieces_startpos_drawing_with_length = 
 						split_exons_at_foreign_intronpos( exon.start_pos_in_aligned_protein, exon.length_in_alignment )
-
 					exon_pieces_startpos_drawing_with_length.each do |startpos_drawing, length_drawing|
 						svg << svg_obj.draw_box( startpos_drawing, length_drawing, y_pos, svg_obj.colors[:exon] )
 					end
@@ -152,7 +151,7 @@ class GeneAlignment2svg
 					gap_startpos_drawing = intron_startpos_drawing + intron_length
 					gap_length = enlongate_intron_to_avoid_gaps( max_len_this_intron_pos - intron_length )
 
-					svg << svg_obj.draw_box(gap_startpos_drawing, gap_length, y_pos, svg_obj.colors[:intron_gap])
+					svg << svg_obj.draw_box(gap_startpos_drawing, gap_length, y_pos, svg_obj.colors[:intron_gap], {draw_smaller_box: true})
 				end
 
 			end
@@ -160,7 +159,7 @@ class GeneAlignment2svg
 			# draw gaps
 			# draw them after then exons are drawn, as gaps may be on top of exons
 			# split gaps because of introns in other genes
-			gene.get_all_gaps_in_aligned_seq_within_range.each do |pos, len|
+			gene.get_all_gaps_in_aligned_seq.each do |pos, len|
 				gap_startpos_drawing = calc_pos_drawing( pos, "exon" )
 				gap_endpos_drawing = calc_pos_drawing( pos+len, "exon-ende" )
 				gap_length = gap_endpos_drawing - gap_startpos_drawing
@@ -170,10 +169,10 @@ class GeneAlignment2svg
 						split_exons_at_foreign_intronpos( pos, len )
 
 					gap_pieces_startpos_drawing_with_length.each do |startpos_drawing, length_drawing|
-						svg << svg_obj.draw_box( startpos_drawing, length_drawing, y_pos, svg_obj.colors[:exon_gap] )
+						svg << svg_obj.draw_box( startpos_drawing, length_drawing, y_pos, svg_obj.colors[:exon_gap], {draw_smaller_box: true} )
 					end
 				else
-					svg << svg_obj.draw_box( gap_startpos_drawing, gap_length, y_pos, svg_obj.colors[:exon_gap])
+					svg << svg_obj.draw_box( gap_startpos_drawing, gap_length, y_pos, svg_obj.colors[:exon_gap], {draw_smaller_box: true})
 				end
 
 			end
@@ -288,13 +287,21 @@ class GeneAlignment2svg
 			this_start = this_end
 		end
 
+		# add last exon piece
+		startpos_drawing = calc_pos_drawing( this_start, "exon" )
+		endpos_drawing = calc_pos_drawing( endpos, "exon-ende" )
+		length_drawing = endpos_drawing - startpos_drawing
+		startpos_len_pieces << [startpos_drawing, length_drawing]
+
+
 		# special case: no intron interrupts this exon
 		# simply return exon as it is (but of course fit for drawing)
 		if startpos_len_pieces.empty? then 
-			startpos_drawing = calc_pos_drawing( startpos, "exon" )
-			endpos_drawing = calc_pos_drawing( endpos, "exon-ende" )
-			length_drawing = endpos_drawing - startpos_drawing
-			startpos_len_pieces << [startpos_drawing, length_drawing]
+			puts "should not happen any more!"
+			# startpos_drawing = calc_pos_drawing( startpos, "exon" )
+			# endpos_drawing = calc_pos_drawing( endpos, "exon-ende" )
+			# length_drawing = endpos_drawing - startpos_drawing
+			# startpos_len_pieces << [startpos_drawing, length_drawing]
 		end
 
 		return startpos_len_pieces

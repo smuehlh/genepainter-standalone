@@ -56,7 +56,7 @@ end
 # make sure all _needed_ aligned sequences are of same length
 common_aligned_seqs = Sequence.ensure_seqs_have_same_length(aligned_seqs, aligned_seqs_names, common_names)
 # remove common gaps if neccessary
-common_aligned_seqs = Sequence.remove_common_gaps(common_aligned_seqs) if options[:ignore_common_gaps]
+common_aligned_seqs = Sequence.remove_common_gaps(common_aligned_seqs, {is_alignment: true}) if options[:ignore_common_gaps]
 
 # merge gene structure and sequence into a gene object
 common_names.each_with_index do |gene_name, ind|
@@ -81,7 +81,6 @@ common_names.each_with_index do |gene_name, ind|
 
 	elsif f_extension.casecmp(".gff") == 0 then
 		# gff format
-		# TODO
 		data_obj = GffToGene.new(data, gene_name)
 
 	else
@@ -91,7 +90,8 @@ common_names.each_with_index do |gene_name, ind|
 	# create a gene object with this structure and sequence
 	gene_obj = data_obj.to_gene # method to_gene returns a gene object containing the structure
 	gene_obj.add_aligned_seq(common_aligned_seqs[ind]) # ... and aligned sequence
-	gene_obj.add_alignment_range(options[:range] || []) # ... and range(s) of interesting parts [numbers match to the aligned sequence]
+#	gene_obj.add_alignment_range(options[:range] || []) # ... and range(s) of interesting parts [numbers match to the aligned sequence]
+	gene_obj.reduce_gene_to_range(options[:range]) if options[:range].any?
 	gene_objects << gene_obj
 end
 
@@ -100,13 +100,27 @@ puts " done."
 # inform which data are not used
 Helper.print_intersect_and_diff_between_alignment_and_gene(aligned_seqs_names, gene_names)
 
+# select subset of genes belonging to certain taxa
+if options[:tax_options].any? then 
+	puts ""
+	print "Preparing taxonomy ... "
+	taxonomy_obj = Taxonomy.new(options[:tax_options][:path_to_tax], options[:tax_options][:path_to_tax_mapping])
+	genes_within_taxa = taxonomy_obj.get_genenames_belonging_to_selected_taxa(common_names, options[:tax_options][:selected_taxa])
+	puts " done."
+	Helper.print_genes_within_taxa(genes_within_taxa, options[:tax_options][:selected_taxa])
+end
+
 ### align genes
 puts ""
 print "Aligning genes ..."
 
 # initiate an gene alignment object 
 # this calculates kind of an "master format", the exon-intron-patterns for each gene
-gene_alignment_obj = GeneAlignment.new(gene_objects, options[:consensus], options[:merge])
+gene_alignment_obj = GeneAlignment.new(gene_objects, 
+	options[:consensus], 
+	options[:merge], 
+	{ genes_within_taxa: genes_within_taxa, is_exclusive: options[:tax_options][:is_exclusive] }
+	)
 puts " done."
 
 ### prepare output for every requested format
@@ -158,5 +172,6 @@ if options[:output_format_list].include?("pdb") then
 	f_out = options[:path_to_output] + "-color_splicesites.py"
 	write_verbosely_output_to_file(f_out, output2)
 end
+
 
 puts " done."
