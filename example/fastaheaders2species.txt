@@ -1,0 +1,9 @@
+HsCoro1A, HsCoro1B, HsCoro1C, HsCoro1D, HsCoro2A, HsCoro2B: Homo sapiens
+GgCoro1C,GgCoro2A: Gallus gallus
+DmCoro1:Drosophila melanogaster
+AngCoro1,AngCoro2:Anopheles gambiae
+CeCoro1:Caenorhabditis elegans
+Pf_aCoro:Plasmodium falciparum
+EnCoro:Emericella nidulans
+AecCoro:Aspergillus carbonarius
+SpCoro:Schizosaccharomyces pombe

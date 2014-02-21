@@ -1,8 +1,7 @@
 # a gene consists of exons and introns
-# Important: all get_... methods should return features _within_ alignment range
 
 class Gene
-	attr_accessor :aligned_seq, :exons, :introns, :alignment_range
+	attr_accessor :aligned_seq, :exons, :introns
 	attr_reader :name
 
 	def initialize(name)
@@ -10,7 +9,6 @@ class Gene
 		@aligned_seq = nil
 		@exons = [] # exon objects in their correct order
 		@introns = [] # intron objects in their correct order
-#		@alignment_range = [] # array of arrays; restrict mapping of gene stucture onto alignment to these parts of the alignment
 	end
 
 	# set instance variable @aligned_seq and also exon/intron position in alignment
@@ -39,6 +37,7 @@ class Gene
 		aligned_seq_within_range = ""
 
 		if range[:is_delete_range] then 
+			# delete range
 
 			# maybe variable name is abit missleading, but aligned_seq_within_range is sequence _outside range to del_
 			aligned_seq_within_range = @aligned_seq[0...range_start] + @aligned_seq[range_end+1..-1]
@@ -154,6 +153,7 @@ class Gene
 			end # introns.each
 
 		else
+			# keep range
 
 			aligned_seq_within_range =  @aligned_seq[range_start..range_end] # inclusive range_end
 			aligned_seq_before_range = @aligned_seq[0...range_start]
@@ -235,7 +235,7 @@ class Gene
 
 		if @aligned_seq.empty? ||
 			@exons.empty? then  
-			# allow 1-exon genes (no introns), but expects at least 1-exon genes
+			# every gene should have still min. 1 exon
 			Helper.abort "Cannot reduce gene #{@name} to range."
 		end
 	end
@@ -303,10 +303,9 @@ class Gene
 
 	def get_all_introns_with_phase
 
-		all_pos_with_phase = @introns.collect do |intron|
+		@introns.collect do |intron|
 			intron.get_alignmentpos_and_phase
 		end
-		return all_pos_with_phase
 	end
 
 	def get_all_intronpositions
@@ -322,6 +321,28 @@ class Gene
 	# 	end
 	# end
 
+	def get_all_gap_boundaries_preceeded_by_intron
+		@introns.collect do |intron|
+
+			char_after_intron_in_alignment = @aligned_seq[ intron.pos_last_aa_in_aligned_protein_before_intron + 1]
+			if char_after_intron_in_alignment == "-" then
+				# intron is located before an gap
+
+				# but due to some very strange gene prediction, the intron might split the very last codon (yes, seen once!)
+				begin
+					gap = @aligned_seq[ intron.pos_last_aa_in_aligned_protein_before_intron + 1 .. -1].match(/(-+)[^-]/)[1]
+				rescue
+					gap = ""
+				end
+				pos_gap_end = intron.pos_last_aa_in_aligned_protein_before_intron + gap.size # last position of gap
+
+				[intron.pos_last_aa_in_aligned_protein_before_intron, pos_gap_end]
+			else
+				nil
+			end
+		end.compact
+	end
+
 	# a sequence of same length as "@aligned_seq" consisting of gaps and intron phases only
 	# exon_representation will be used to display exon, default: "-"
 	# intron_representation will be used to display intron, default: intron phase
@@ -335,8 +356,7 @@ class Gene
 			intron_pos_in_alignment[pos] = intron_representation || intron.phase
 		end
 
-		reduced_pattern = intron_pos_in_alignment.join("")
-		return reduced_pattern
+		intron_pos_in_alignment.join("")
 	end
 
 end

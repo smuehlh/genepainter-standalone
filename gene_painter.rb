@@ -21,7 +21,7 @@ options = OptParser.parse(args)
 def write_verbosely_output_to_file(f_name, output)
 	puts "\t writing output to #{f_name} ... "
 	# add newline to string, in case it does not end with one
-	if output.end_with?("\n") then 
+	if ! output.end_with?("\n") then 
 		output << "\n"
 	end
 	IO.write( f_name, output, :mode => "w" )
@@ -58,6 +58,10 @@ common_aligned_seqs = Sequence.ensure_seqs_have_same_length(aligned_seqs, aligne
 # remove common gaps if neccessary
 common_aligned_seqs = Sequence.remove_common_gaps(common_aligned_seqs, {is_alignment: true}) if options[:ignore_common_gaps]
 
+# special case: gap before/after intron
+# correct intron position (default: before gap) if there is any other sequence with and intron at same pos as gap-end
+introns_before_gap_pos_gene = {}
+
 # merge gene structure and sequence into a gene object
 common_names.each_with_index do |gene_name, ind|
 
@@ -90,12 +94,69 @@ common_names.each_with_index do |gene_name, ind|
 	# create a gene object with this structure and sequence
 	gene_obj = data_obj.to_gene # method to_gene returns a gene object containing the structure
 	gene_obj.add_aligned_seq(common_aligned_seqs[ind]) # ... and aligned sequence
-#	gene_obj.add_alignment_range(options[:range] || []) # ... and range(s) of interesting parts [numbers match to the aligned sequence]
 	gene_obj.reduce_gene_to_range(options[:range]) if options[:range].any?
 	gene_objects << gene_obj
+
+	# collect all positions of introns before gap-positions in aligned sequence
+	if options[:best_intron_pos] then 
+		gene_obj.get_all_gap_boundaries_preceeded_by_intron.each do |intron_pos, gap_end|
+			(introns_before_gap_pos_gene[intron_pos] ||= []).push( [gene_name, gap_end] )
+		end
+	end
+
 end
 
 puts " done."
+
+if options[:best_intron_pos] && introns_before_gap_pos_gene.any? then 
+
+	puts "Corret intron positions flanking alignment gaps ..."
+
+	# check if there is at least one sequence without gap at this position
+	# check if that sequence has an intron at gap start/end?
+
+	# re-position intron for each gene in genes-lists
+
+	introns_before_gap_pos_gene.each do |pos_before_gap, occurence|
+
+		gene_names_this_intron = occurence.collect { |arr| arr[0] }
+		gap_end_positions_this_intron = occurence.collect { |arr| arr[1] }
+
+		gene_objects.each do |ref_gene|
+
+			if gene_names_this_intron.include?(ref_gene.name) then 
+				# reference gene has a gap itself after this intron
+				next
+			end
+
+			# reference gene has no gaps starting at position of this intron
+
+			# introns of this gene might be at same position as intron under question:
+			# 1) at pos_before_gap: don't do anything
+			# 2) at pos after gap: change position of introns!
+
+			intron_pos_ref_gene = ref_gene.get_all_intronpositions
+
+			gap_end_positions_this_intron.each_with_index do |pos_end_of_gap, ind|
+
+				if intron_pos_ref_gene.include?(pos_end_of_gap) then 
+
+					# shift intron of this gene to end of gap
+					this_name = gene_names_this_intron[ind]
+					this_gene = gene_objects.select { |g| g.name ==  this_name }.first # select returns array, use first to get object itself
+
+					this_gene.introns.each do |intron|
+						if intron.pos_last_aa_in_aligned_protein_before_intron == pos_before_gap then 
+							# this is the intron under question
+							intron.set_variables_describing_intron_in_aligned_seq( this_gene.aligned_seq, false ) #false: do not position intron at beginning of gap
+						end
+					end
+				end
+			end
+		end
+	end
+	puts " done."
+end
 
 # inform which data are not used
 Helper.print_intersect_and_diff_between_alignment_and_gene(aligned_seqs_names, gene_names)
@@ -104,10 +165,21 @@ Helper.print_intersect_and_diff_between_alignment_and_gene(aligned_seqs_names, g
 if options[:tax_options].any? then 
 	puts ""
 	print "Preparing taxonomy ... "
+
 	taxonomy_obj = Taxonomy.new(options[:tax_options][:path_to_tax], options[:tax_options][:path_to_tax_mapping])
-	genes_within_taxa = taxonomy_obj.get_genenames_belonging_to_selected_taxa(common_names, options[:tax_options][:selected_taxa])
 	puts " done."
-	Helper.print_genes_within_taxa(genes_within_taxa, options[:tax_options][:selected_taxa])
+
+	if options[:tax_options][:selected_taxa] then
+		genes_within_taxa = taxonomy_obj.get_genenames_belonging_to_selected_taxa(common_names, options[:tax_options][:selected_taxa])
+		Helper.print_genes_within_taxa(genes_within_taxa, options[:tax_options][:selected_taxa])
+	end
+	if options[:statistics] then 
+		genes_with_parents = taxonomy_obj.get_all_parents_for_genes(common_names)
+	end
+	if options[:output_format_list].include?("sorrow_tax") then 
+		taxa_with_child_genes = taxonomy_obj.get_all_inner_nodes_with_children(common_names)
+	end
+
 end
 
 ### align genes
@@ -119,6 +191,7 @@ print "Aligning genes ..."
 gene_alignment_obj = GeneAlignment.new(gene_objects, 
 	options[:consensus], 
 	options[:merge], 
+	options[:statistics],
 	{ genes_within_taxa: genes_within_taxa, is_exclusive: options[:tax_options][:is_exclusive] }
 	)
 puts " done."
@@ -173,5 +246,14 @@ if options[:output_format_list].include?("pdb") then
 	write_verbosely_output_to_file(f_out, output2)
 end
 
+if options[:output_format_list].include?("stats") then 
+	output = gene_alignment_obj.export_as_statistics(genes_with_parents || nil)
+	f_out = options[:path_to_output] + "-stats.txt"
+	write_verbosely_output_to_file(f_out, output)
+end
+
+if options[:output_format_list].include?("sorrow_tax") then 
+	# TODO
+end
 
 puts " done."

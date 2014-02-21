@@ -3,6 +3,13 @@ class GeneAlignment
 	attr_reader :exon_placeholder, :intron_placeholder
 
 	## output parameter definition 
+	@consensus_val = "1.0"
+	def self.consensus_val=(val)
+		@consensus_val = val.to_s
+	end
+	def self.consensus_val
+		@consensus_val
+	end
 	def self.max_length_gene_name
 		return 20
 	end
@@ -13,7 +20,7 @@ class GeneAlignment
 		return "Merged"
 	end
 	def self.consensus_structure_name
-		return "Consensus"
+		return "Consensus_#{consensus_val}"
 	end
 	def self.taxonomy_structure_name
 		return "Taxonomy"
@@ -23,22 +30,25 @@ class GeneAlignment
 
 	# input
 	# Array genes: gene objects, must have an aligned sequence
-	# Float or false: calculate a consensus pattern (conserved in val sequences)
+	# Float or false: calculate a consensus pattern (conserved in % val sequences)
 	# Boolean: calculate a merged pattern
+	# Boolean: calculate statistics
 	# Hash taxonomy_options: genes_within_taxa: Array [subset of gene.names (belong to genes objects)], is_exclusive: Boolean [introns exclusive for selected taxa]
-	def initialize(genes, consensus_val, is_merged_pattern, taxonomy_options)
+	def initialize(genes, consensus_val, is_merged_pattern, is_statistics, taxonomy_options)
 		# @aligned_genes = detect_conserved_introns(genes)
 		@genes = genes
 
 		@exon_placeholder = "-"
 		@intron_placeholder = nil # defaults to intron phase
 
+		# overwritten by method convert_to_exon_intron_pattern
 		@ind_consensus_pattern = nil
 		@ind_merged_pattern = nil
 		@ind_tax_pattern = nil
+		@stats_per_intron_pos = {}
 		
 		# convert_to_exon_intron_pattern overwrites also @ind_consensus_pattern, @ind_merged_pattern, @ind_tax_pattern if neccessary
-		@aligned_genestructures = convert_to_exon_intron_pattern(consensus_val, is_merged_pattern, taxonomy_options) # are of same order as @genes !!!
+		@aligned_genestructures = convert_to_exon_intron_pattern(consensus_val, is_merged_pattern, is_statistics, taxonomy_options) # are of same order as @genes !!!
 		@reduced_aligned_genestructures = reduce_exon_intron_pattern # reduce gene structures to "needed" parts 
 
 		@n_structures = @aligned_genestructures.size
@@ -48,13 +58,13 @@ class GeneAlignment
 	# exon representation: "-", intron representation: phase
 	# output
 	# Array of strings: exon intron pattern plotted onto the aligned sequence
-	def convert_to_exon_intron_pattern(consensus_val, is_merged_pattern, taxonomy_options)
+	def convert_to_exon_intron_pattern(consensus_val, is_merged_pattern, is_statistics, taxonomy_options)
 		# collect the exon_intron_patterns of each gene, also for merged/consensus
+
 		patterns = Array.new(@genes.size)
 
-		n_introns_per_pos = Hash.new( 0 )
-		intronphase_per_pos = Hash.new( 0 )
-		n_introns_per_pos_selected_taxa = Hash.new( 0 )
+		# number of introns, phase, and genes it occurs in for each intron position
+		intron_pos_with_annotation = Hash.new { |h,k| h[k] = { n_introns: 0, phase: "?", genes: [] } }
 
 		# parse taxonomy input
 		genes_within_selected_taxa = taxonomy_options[:genes_within_taxa] || []
@@ -63,91 +73,80 @@ class GeneAlignment
 		@genes.each_with_index do |gene, ind|
 			patterns[ind] = gene.plot_intron_phases_onto_aligned_seq(@exon_placeholder, @intron_placeholder)
 
-			update_count_of_number_introns_per_pos(n_introns_per_pos, intronphase_per_pos, gene)
-			update_intronpos_within_selected_taxa(n_introns_per_pos_selected_taxa, gene, genes_within_selected_taxa)
+			update_annotation_per_intron_position(gene, intron_pos_with_annotation)
 		end
 
 		if consensus_val then 
 			pattern_length = patterns[0].size
 			min_n_introns_per_pos = consensus_val * @genes.size
-			patterns << generate_consensus_profile(n_introns_per_pos, intronphase_per_pos, min_n_introns_per_pos, pattern_length)
+			patterns << generate_consensus_profile( intron_pos_with_annotation, min_n_introns_per_pos , pattern_length )
 			@ind_consensus_pattern = patterns.size - 1 # indices start with 0
+			self.class.consensus_val = consensus_val # set class variable needed for export functions
 		end
 		if is_merged_pattern then
 			pattern_length = patterns[0].size
-			patterns << generate_merged_profile(intronphase_per_pos, pattern_length)
+			patterns << generate_merged_profile( intron_pos_with_annotation, pattern_length )
 			@ind_merged_pattern = patterns.size - 1 # indices start with 0
 		end
 		if genes_within_selected_taxa.any? then
 			pattern_length = patterns[0].size
-			patterns << generate_taxonomy_pattern(n_introns_per_pos_selected_taxa, n_introns_per_pos, intronphase_per_pos, 
-				pattern_length, is_intron_exclusive_for_taxa)
+			patterns << generate_taxonomy_pattern( intron_pos_with_annotation, genes_within_selected_taxa, is_intron_exclusive_for_taxa, 
+				pattern_length )
 			@ind_tax_pattern = patterns.size - 1 # indices start with 0
+		end
+		if is_statistics then 
+			# stats also include phase information, which are currently not used
+			@stats_per_intron_pos = intron_pos_with_annotation
 		end
 
 		return patterns
 	end
 
-	# methods for "statistics: merged and consensus profile"
-	# input/output: Hash counts, Hash phases
-	def update_count_of_number_introns_per_pos(counts, phases, gene)
-		pos_phase_list = gene.get_all_introns_with_phase
-		pos_phase_list.each do |pos_phase|
-			pos = pos_phase[0]
-			phase = pos_phase[1]
-			counts[pos] += 1
-			phases[pos] = phase
+	# methods for "statistics per intron position and statistics: merged/consensus/taxonomy profile"
+
+	# update counts, phase and occurence-list per intron position
+	def update_annotation_per_intron_position(gene, intron_pos_with_annotation)
+		gene.get_all_introns_with_phase.each do |pos, phase|
+
+			intron_pos_with_annotation[pos][:n_introns] += 1
+			intron_pos_with_annotation[pos][:phase] = phase
+			intron_pos_with_annotation[pos][:genes].push gene.name
 		end
 	end
-	def generate_consensus_profile(counts, phases, min_n_introns, pattern_length)
+	def generate_consensus_profile(intron_pos_with_annotation, min_n_introns, pattern_length)
 		consensus_pattern = get_empty_pattern(pattern_length)
 
-		counts.each do |intronpos, intronnum|
+		intron_pos_with_annotation.each do |intronpos, info|
 			# check if the intron occurs often enough
-			if intronnum >= min_n_introns then 
-				consensus_pattern[intronpos] = phases[intronpos]
+			if info[:n_introns] >= min_n_introns then 
+				consensus_pattern[intronpos] = info[:phase]
 			end
 		end
 		return consensus_pattern
 	end
-	def generate_merged_profile(phases, pattern_length)
+	def generate_merged_profile(intron_pos_with_annotation, pattern_length)
 		merged_pattern = get_empty_pattern(pattern_length)
 
-		phases.each do |intronpos, intronphase|
-			merged_pattern[intronpos] = intronphase
+		intron_pos_with_annotation.each do |intronpos, info|
+			merged_pattern[intronpos] = info[:phase]
 		end
 		return merged_pattern
 	end
 	def get_empty_pattern(len)
 		return @exon_placeholder * len
 	end
-	# end methods for "statistics"
-
-	# methods for "taxonomy: reduce exon-intron pattern to introns within selected taxa"
-	def update_intronpos_within_selected_taxa(counts, gene, selected_genes)
-		if selected_genes.include?(gene.name) then 
-			# collect introns
-			intronpos = gene.get_all_intronpositions
-			intronpos.each do |pos|
-				counts[pos] += 1
-			end
-		end
-	end
-	def generate_taxonomy_pattern(counts_wanted, counts_all, phases, pattern_length, is_exclusive)
-		# counts_wanted: intron pos and number of selected genes
-		# counts_all: intron pos and number of all genes
-		# is_exclusive: switches between printing introns exclusive for selected taxa and all introns occuring in selected taxa
-		# if intron is exclusive for selected genes: occurs nowhere else
+	def generate_taxonomy_pattern( intron_pos_with_annotation, genes_within_selected_taxa, is_intron_exclusive_for_taxa, pattern_length )
 		tax_pattern = get_empty_pattern(pattern_length)
-		counts_wanted.each do |intronpos, intronnum|
-			if is_exclusive && intronnum != counts_all[intronpos] then 
-				next
+
+		intron_pos_with_annotation.each do |intronpos, info|
+			if ( is_intron_exclusive_for_taxa && (genes_within_selected_taxa == info[:genes]) ) ||
+				( ! is_intron_exclusive_for_taxa && (genes_within_selected_taxa & info[:genes]).any? ) then
+				tax_pattern[intronpos] = info[:phase]
 			end
-			tax_pattern[intronpos] = phases[intronpos]
 		end
 		return tax_pattern
 	end
-	# end methods for "taxonomy"
+	# end methods for statistics
 
 	def reduce_exon_intron_pattern
 		# important: duplicate the pattern ! 
@@ -336,6 +335,104 @@ class GeneAlignment
 
 		return output1, output2
 	end
+
+	def export_as_taxonomy(bla)
+		# compare consensus pattern of every node with the consensus pattern of every node before (direction to root)
+
+		# wie zusammenspiel mit anderen tax -optionen???
+
+	end
+
+	def export_as_statistics(ancestors_of_each_gene)
+
+		# output contains of
+		# 1) exon-intron patterns which labels each intron position with an number
+		# 2) information about each intron position: number of introns , last common ancestor, ancestor following the LCA
+
+		# collect data for output
+		# => for each pattern:  pattern with blanks & legend-like lines
+		genestructures_with_legend = exon_intron_pattern_with_spaces_and_legend_for_intron_numbers
+
+		# => for each intron position: lca, list with first ancestors after lca with n_genes having this
+		infos_per_intronpos = Array.new( @stats_per_intron_pos.size  + 1)
+		infos_per_intronpos[0] = "Intron number\t # introns\t last comman ancestor; first ancestors after the last common ancestor (if applicable)"
+		@stats_per_intron_pos.keys.sort.each_with_index do |intron_pos, ind|
+			# ind is number of intron, not number of introns occuring at this position
+
+			ind_info_arr = ind + 1
+			one_based_ind = Helper.ruby2human_counting(ind) # by change, this is the same as ind_info_arr ... but its cleaner with 2 vars
+
+			n_introns = @stats_per_intron_pos[intron_pos][:n_introns]
+
+			genes = @stats_per_intron_pos[intron_pos][:genes]
+			if ancestors_of_each_gene then 
+				ancestors_of_these_genes = genes.collect{ |g| ancestors_of_each_gene[g] }
+				ancestors_of_these_genes.delete_if{|sub_arr| sub_arr == [] }
+			else
+				ancestors_of_these_genes = []
+			end
+
+			if ancestors_of_these_genes.any? then 
+				last_common = Taxonomy.last_common_ancestor_of_genes(ancestors_of_these_genes)
+				first_uniq_list = Taxonomy.first_uniq_ancestors_of_genes(ancestors_of_these_genes)
+				first_uniq_freq = Helper.word_frequency(first_uniq_list)
+				first_uniq_pretty_arr = []
+				# sort frequencies in reverse order
+				first_uniq_freq.sort_by {|_k,v| v}.reverse.each do |word, freq|
+					first_uniq_pretty_arr << "#{word} (#{freq})"
+				end
+
+				# save infos for this intron position
+				infos_per_intronpos[ind_info_arr] = "#{one_based_ind}\t#{n_introns}\t#{last_common}; #{first_uniq_pretty_arr.join(", ")}"
+			else
+				infos_per_intronpos[ind_info_arr] = "#{one_based_ind}\t#{n_introns}\tNo information about taxonomy."
+			end
+
+		end
+
+		return [ genestructures_with_legend, infos_per_intronpos ].join("\n")
+
+	end
+
+	def exon_intron_pattern_with_spaces_and_legend_for_intron_numbers
+
+		output = Array.new(@genes.size + 1) # +1 for legend-like line
+		sorted_intronpositions = @stats_per_intron_pos.keys.sort
+		n_blanks = sorted_intronpositions.size.to_s.size + 1 # number of blanks needed to display intron number: the number of positions + additional blank
+		legend = get_empty_pattern(@aligned_genestructures.first.size).split("")
+
+		# iterate over genes instead of aligned_genestructures to avoid merged/consensus/taxonomy pattern
+		@genes.each_with_index do |gene, ind|
+
+			name = convert_string_to_chopped_fasta_header( gene.name )
+			struct = @aligned_genestructures[ind]
+
+			# insert blanks after each intron position
+			struct = replace_exon_intron_placeholders_in_structure( struct, "-", "|" )
+			struct = struct.split("")
+
+			sorted_intronpositions.each_with_index do |pos, num|
+				# num is number of intron, not number of introns occuring at this position
+				one_based_count = Helper.ruby2human_counting(num) 
+
+				struct[pos] = struct[pos].ljust(n_blanks)
+				legend[pos] = one_based_count.to_s.ljust(n_blanks)
+
+			end
+
+			output[ind] = [name, struct].join("")
+		end
+
+		output[-1] = [ convert_string_to_chopped_fasta_header( "Intron number" ), legend ].join("")
+		# remove common gaps from structures
+		output = Sequence.remove_common_gaps(output, {is_alignment: false})
+
+		# replace "-" with " " to prettify the legend-string
+		output[-1] = output[-1].gsub("-", " ")
+
+		return output.join("\n")
+	end
+
 
 
 	# # find all introns with same phase and position

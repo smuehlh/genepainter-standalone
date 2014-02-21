@@ -35,10 +35,13 @@ class OptParser
 		options[:ignore_common_gaps] = false # restrict input alignment: ignore gaps common to all sequences
 		options[:consensus] = false # add consenus profile to output ?
 		options[:merge] = false # add merged profile to output ?
+		options[:statistics] = false # have some statistics as output
 
 		options[:svg_options] = {} # options for svg output, only set if svg_output is requested
 		options[:pdb_options] = {} # options for pdb output, only set if pdb_output is requested
 		options[:tax_options] = {} # options for taxonomy output, only set if taxonomy is requested
+
+		options[:best_intron_pos] = true # align intron positions which differ only by alignment gaps
 
 
 		opt_parser = OptionParser.new do |opts|
@@ -156,13 +159,18 @@ class OptParser
 			opts.on("--merge", "Merge all introns into a single exon intron pattern") do 
 				options[:merge] = true 
 			end
+			opts.on("--statistics", 
+				"Output additional file with statistics about common introns",
+				"To include information about taxomony, specify '--taxomony' and '--taxonomy-to-fasta' options") do 
+				options[:statistics] = true
+				options[:output_format_list] << "stats"
+			end
 
 			opts.separator ""
-			opts.separator "Phylogeny:"
+			opts.separator "Taxonomy:"
 			opts.on("--taxonomy FILE", String,
 				"Mark introns by taxonomy",
 				"NCBI taxonomy database dump file FILE") do |file|
-				options[:output_format_list] << "tax"
 				vivify_hash(options, :tax_options, :path_to_tax, file)
 				Helper.file_exist_or_die(file)
 			end
@@ -175,12 +183,17 @@ class OptParser
 			opts.on("--taxonomy-common-to x,y,z", Array, 
 				"Mark introns common to taxa x,y,z", 
 				"List can consist of one taxon only") do |list|
+				options[:output_format_list] << "tax"
 				list = list.map {|str| str.capitalize}
 				vivify_hash(options, :tax_options, :selected_taxa, list)
 			end
 			opts.on("--[no-]exclusively-in-taxa", 
 				"Mark introns occuring (not) exclusivley in listed taxa") do |opt|
 				vivify_hash(options, :tax_options, :is_exclusive, opt)
+			end
+			opts.on("--introns-per-taxon", 
+				"Newly gained introns for every inner node in taxonomy") do |opt|
+				options[:output_format_list] << "sorrow_tax"
 			end
 
 			opts.separator ""
@@ -219,6 +232,12 @@ class OptParser
 			opts.on("--ignore-common-gaps", 
 				"Ignore common gaps in alignment") do
 				options[:ignore_common_gaps] = true
+			end
+
+			opts.on("--no-best-position-introns", 
+				"Plot introns always onto beginning of a gap",
+				"Default: Align introns if their position differs by alignment gaps only") do 
+				options[:best_intron_pos] = false
 			end
 	
 			opts.separator ""
@@ -265,7 +284,25 @@ class OptParser
 				options[:tax_options][:path_to_tax_mapping] &&
 				options[:tax_options][:selected_taxa] ) then
 
-				Helper.abort "Mandatory argument fo --taxonomy is missing: Specify --taxonomy FILE, --taxonomy-to-fasta FILE and --taxonomy-common-to x,y,z"
+				Helper.abort "Mandatory argument for taxonomy is missing: Specify --taxonomy FILE, --taxonomy-to-fasta FILE and --taxonomy-common-to x,y,z"
+			end
+		end
+		if options[:output_format_list].include?("sorrow_tax") then 
+			# don't need list of of taxa, but path to tax and path to tax mapping
+			if ! (
+				options[:tax_options][:path_to_tax] &&
+				options[:tax_options][:path_to_tax_mapping]	) then 
+
+				Helper.abort "Mandatory argument for taxonomy is missing: Specify --taxonomy FILE and --taxonomy-to-fasta FILE"
+			end
+		end
+
+		# dont make taxonomy mandatory for statistiscs option!
+
+		# ensure than both for statistics and taxonomy-common-to output, taxonomy file and mapping file are specified
+		if options[:tax_options][:path_to_tax] || options[:tax_options][:path_to_tax_mapping] then 
+			if ! ( options[:tax_options][:path_to_tax] && options[:tax_options][:path_to_tax_mapping] ) then
+				Helper.abort "Mandatory argument for taxonomy is missing: Specify --taxonomy FILE, --taxonomy-to-fasta FILE"
 			end
 		end
 

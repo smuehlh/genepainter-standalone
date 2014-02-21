@@ -1,9 +1,14 @@
 module Sequence
 	extend self
 
-	def sequence_pos2alignment_pos(spos, aseq)
+	# optional parameter: is_return_pos_before_gap: return position of last aa before gap, instead of last gap pos if applicable
+	def sequence_pos2alignment_pos(spos, aseq, is_return_pos_before_gap=true)
 		pats = []
 		aseq.gsub("-", "")[0..spos].split("").each {|chr| pats << ("-*" + chr)}
+		if ! is_return_pos_before_gap then 
+			# add pattern for trailing gap
+			pats.push("-*")
+		end
 		pat = Regexp.new(pats.join)
 		pat.match(aseq)[0].length - 1
 	end

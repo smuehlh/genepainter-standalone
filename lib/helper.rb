@@ -88,6 +88,13 @@ module Helper
 	def human2ruby_counting(num)
 		num - 1
 	end
+
+	def word_frequency(arr)
+		res = Hash.new(0)
+		arr.each { |a| res[a] += 1 }
+		res.delete(nil)
+		return res
+	end
 end
 
 class Array

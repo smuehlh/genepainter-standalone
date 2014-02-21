@@ -1,0 +1,4 @@
+Logfile created on 2014-02-18 09:46:33 +0100 by GenePainter
+Program call: -i example/coronin_alignment.fas -p example/coronin_genes --statistics
+
+Used BrCoro1A, HsCoro1A, HsCoro1B, HsCoro1C, GgCoro1C, BrCoro1Cbeta, BrCoro1D, HsCoro1D, BrCoro1E, DmCoro1, AngCoro1, CeCoro1, BrCoro2A, HsCoro2A, GgCoro2A, XtCoro2A, BrCoro2B, HsCoro2B, XtCoro2B, BrCoro2C, BrCoro2D, AngCoro2, Pf_aCoro, EnCoro, AecCoro, SpCoro genes for computation.

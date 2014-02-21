@@ -43,12 +43,14 @@ class Intron
 		return phase == "?"
 	end
 
-	def set_variables_describing_intron_in_aligned_seq(aligned_seq)
+	def set_variables_describing_intron_in_aligned_seq(aligned_seq, is_pos_before_gap=true)
 		# start and end positions are in nucleotides, aligned sequece consists of amion acids
 		# 3 nucleotides code for 1 amino acid
 		
+		protein_pos = convert_dna_pos_into_protein_pos(@pos_last_nt_in_dna_seq_before_intron)
+
 		@pos_last_aa_in_aligned_protein_before_intron = 
-			Sequence.sequence_pos2alignment_pos(convert_dna_pos_into_protein_pos(@pos_last_nt_in_dna_seq_before_intron) - 1, aligned_seq) # -1 to make it the _last_ amino acid 
+			Sequence.sequence_pos2alignment_pos(protein_pos - 1, aligned_seq, is_pos_before_gap) # -1 to make it the _last_ amino acid 
 	end
 
 	def convert_dna_pos_into_protein_pos(pos)
