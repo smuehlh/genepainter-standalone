@@ -57,11 +57,25 @@ module Helper
 
 	end
 
-	# inform which data are used for taxonomy-restricted data set
-	def print_genes_within_taxa(genes_within_taxa, selected_taxa)
-		puts "Genes belonging to selected taxa #{selected_taxa.join(", ")}: #{genes_within_taxa.join(", ")}."
+	# inform which data are used and not used for taxonomy
+	def print_intersect_and_diff_between_taxonomy_genes_and_selected_taxa(all_genes, genes_with_taxonomy, selected_taxa, genes_within_selected_taxa)
+		missing_tax = all_genes - genes_with_taxonomy
+		puts ""
+		if missing_tax.any? then
+			puts "No taxonomy for: #{missing_tax.join(", ")}."
+		end
+		if genes_with_taxonomy.any? then 
+			puts "Taxonomy for: #{genes_with_taxonomy.join(", ")}."
+		end
+		if genes_within_selected_taxa.any? then
+			puts "Genes belonging to selected taxa >#{selected_taxa.join(", ")}<: #{genes_within_selected_taxa.join(", ")}"
+		end
+
+		# write to log 
 		log ""
-		log "Taxonomy: Used #{genes_within_taxa.size} genes for computation."
+		log "Genes with taxonomic information: #{genes_with_taxonomy.join(", ")}."
+		log "Genes belonging to selected taxa #{selected_taxa.join(", ")}: #{genes_within_selected_taxa.join(", ")}"
+
 	end
 
 	# sub_str can be either a string or a regex
@@ -114,5 +128,23 @@ class Array
 
 	def sum
 		self.inject(0, :+)
+	end
+
+	# mimics set method "subset?"
+	def is_subset?(other_arr)
+		return false if other_arr.size < size
+		all? { |obj| other_arr.include?(obj) }
+	end
+	# mimics set method "intersect?"
+	def is_overlapping_set?(other_arr)
+		(self & other_arr).any?
+		# if size < other_arr.size then 
+		# 	any? { |obj| other_arr.include?(obj) }
+		# else
+		# 	other_arr.any? { |obj| include?(obj) }
+		# end
+	end
+	def intersection(other_arr)
+		self & other_arr
 	end
 end

@@ -156,4 +156,49 @@ module Sequence
 
 	end
 
+	# check if there is at least one sequence without gap at this position
+	# check if that sequence has an intron at gap start/end?
+	# re-position intron for each gene in genes-lists
+	def correct_introns_flanking_gaps(introns_before_gap_pos_gene, gene_objects)
+
+		introns_before_gap_pos_gene.each do |pos_before_gap, occurence|
+
+			gene_names_this_intron = occurence.collect { |arr| arr[0] }
+			gap_end_positions_this_intron = occurence.collect { |arr| arr[1] }
+
+			gene_objects.each do |ref_gene|
+
+				if gene_names_this_intron.include?(ref_gene.name) then 
+					# reference gene has a gap itself after this intron
+					next
+				end
+
+				# reference gene has no gaps starting at position of this intron
+
+				# introns of this gene might be at same position as intron under question:
+				# 1) at pos_before_gap: don't do anything
+				# 2) at pos after gap: change position of introns!
+
+				intron_pos_ref_gene = ref_gene.get_all_intronpositions
+
+				gap_end_positions_this_intron.each_with_index do |pos_end_of_gap, ind|
+
+					if intron_pos_ref_gene.include?(pos_end_of_gap) then 
+
+						# shift intron of this gene to end of gap
+						this_name = gene_names_this_intron[ind]
+						this_gene = gene_objects.select { |g| g.name ==  this_name }.first # select returns array, use first to get object itself
+
+						this_gene.introns.each do |intron|
+							if intron.pos_last_aa_in_aligned_protein_before_intron == pos_before_gap then 
+								# this is the intron under question
+								intron.set_variables_describing_intron_in_aligned_seq( this_gene.aligned_seq, false ) #false: do not position intron at beginning of gap
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+
 end

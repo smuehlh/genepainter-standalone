@@ -33,6 +33,13 @@ at_exit { Helper.close_log }
 Helper.log "Program call: #{ARGV.join(" ")}"
 
 ### read in data, use only intersect of alignment and gene structures
+if options[:tax_options].any? then 
+	## taxonomy, only if neccessary
+	print "Read in taxonomy ..."
+	taxonomy_obj = TaxonomyToGene.new( options[:tax_options][:path_to_tax], options[:tax_options][:path_to_tax_mapping] )
+	puts " done."
+end
+
 print "Read in alignment and genes ..."
 ## alignment
 aligned_seqs_names, aligned_seqs = Sequence.read_in_alignment(options[:path_to_alignment])
@@ -95,6 +102,7 @@ common_names.each_with_index do |gene_name, ind|
 	gene_obj = data_obj.to_gene # method to_gene returns a gene object containing the structure
 	gene_obj.add_aligned_seq(common_aligned_seqs[ind]) # ... and aligned sequence
 	gene_obj.reduce_gene_to_range(options[:range]) if options[:range].any?
+
 	gene_objects << gene_obj
 
 	# collect all positions of introns before gap-positions in aligned sequence
@@ -109,77 +117,24 @@ end
 puts " done."
 
 if options[:best_intron_pos] && introns_before_gap_pos_gene.any? then 
+	print "Corret intron positions flanking alignment gaps ..."
 
-	puts "Corret intron positions flanking alignment gaps ..."
-
-	# check if there is at least one sequence without gap at this position
-	# check if that sequence has an intron at gap start/end?
-
-	# re-position intron for each gene in genes-lists
-
-	introns_before_gap_pos_gene.each do |pos_before_gap, occurence|
-
-		gene_names_this_intron = occurence.collect { |arr| arr[0] }
-		gap_end_positions_this_intron = occurence.collect { |arr| arr[1] }
-
-		gene_objects.each do |ref_gene|
-
-			if gene_names_this_intron.include?(ref_gene.name) then 
-				# reference gene has a gap itself after this intron
-				next
-			end
-
-			# reference gene has no gaps starting at position of this intron
-
-			# introns of this gene might be at same position as intron under question:
-			# 1) at pos_before_gap: don't do anything
-			# 2) at pos after gap: change position of introns!
-
-			intron_pos_ref_gene = ref_gene.get_all_intronpositions
-
-			gap_end_positions_this_intron.each_with_index do |pos_end_of_gap, ind|
-
-				if intron_pos_ref_gene.include?(pos_end_of_gap) then 
-
-					# shift intron of this gene to end of gap
-					this_name = gene_names_this_intron[ind]
-					this_gene = gene_objects.select { |g| g.name ==  this_name }.first # select returns array, use first to get object itself
-
-					this_gene.introns.each do |intron|
-						if intron.pos_last_aa_in_aligned_protein_before_intron == pos_before_gap then 
-							# this is the intron under question
-							intron.set_variables_describing_intron_in_aligned_seq( this_gene.aligned_seq, false ) #false: do not position intron at beginning of gap
-						end
-					end
-				end
-			end
-		end
-	end
+	Sequence.correct_introns_flanking_gaps(introns_before_gap_pos_gene, gene_objects)
 	puts " done."
 end
 
 # inform which data are not used
 Helper.print_intersect_and_diff_between_alignment_and_gene(aligned_seqs_names, gene_names)
+if taxonomy_obj then 
 
-# select subset of genes belonging to certain taxa
-if options[:tax_options].any? then 
-	puts ""
-	print "Preparing taxonomy ... "
+	options[:tax_options][:selected_taxa] ||= [] # set empty selected_taxa explicitly to empty array
+	genes_belonging_to_selected_taxa = options[:tax_options][:selected_taxa].collect do |taxon|
+		taxonomy_obj.get_genes_encoded_by_taxon(taxon)
+	end.flatten.uniq
 
-	taxonomy_obj = Taxonomy.new(options[:tax_options][:path_to_tax], options[:tax_options][:path_to_tax_mapping])
-	puts " done."
-
-	if options[:tax_options][:selected_taxa] then
-		genes_within_taxa = taxonomy_obj.get_genenames_belonging_to_selected_taxa(common_names, options[:tax_options][:selected_taxa])
-		Helper.print_genes_within_taxa(genes_within_taxa, options[:tax_options][:selected_taxa])
-	end
-	if options[:statistics] then 
-		genes_with_parents = taxonomy_obj.get_all_parents_for_genes(common_names)
-	end
-	if options[:output_format_list].include?("sorrow_tax") then 
-		taxa_with_child_genes = taxonomy_obj.get_all_inner_nodes_with_children(common_names)
-	end
-
+	Helper.print_intersect_and_diff_between_taxonomy_genes_and_selected_taxa( 
+		common_names, taxonomy_obj.known_genes, options[:tax_options][:selected_taxa], genes_belonging_to_selected_taxa
+	)
 end
 
 ### align genes
@@ -191,8 +146,9 @@ print "Aligning genes ..."
 gene_alignment_obj = GeneAlignment.new(gene_objects, 
 	options[:consensus], 
 	options[:merge], 
-	options[:statistics],
-	{ genes_within_taxa: genes_within_taxa, is_exclusive: options[:tax_options][:is_exclusive] }
+	{ genes_belonging_to_selected_taxa: genes_belonging_to_selected_taxa || [], 
+		is_intron_exclusive_for_selected_taxa: options[:tax_options][:is_exclusive] || false 
+	}
 	)
 puts " done."
 
@@ -247,13 +203,15 @@ if options[:output_format_list].include?("pdb") then
 end
 
 if options[:output_format_list].include?("stats") then 
-	output = gene_alignment_obj.export_as_statistics(genes_with_parents || nil)
+	output = gene_alignment_obj.export_as_statistics(taxonomy_obj) # taxonomy_obj might be nil
 	f_out = options[:path_to_output] + "-stats.txt"
 	write_verbosely_output_to_file(f_out, output)
 end
 
-if options[:output_format_list].include?("sorrow_tax") then 
-	# TODO
+if options[:output_format_list].include?("extensive_tax") then 
+	output = gene_alignment_obj.export_as_taxonomy(taxonomy_obj)
+	f_out = options[:path_to_output] + "-taxonomy.txt"
+	write_verbosely_output_to_file(f_out, output)
 end
 
 puts " done."

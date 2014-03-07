@@ -34,7 +34,7 @@ class GeneAlignment
 	# Boolean: calculate a merged pattern
 	# Boolean: calculate statistics
 	# Hash taxonomy_options: genes_within_taxa: Array [subset of gene.names (belong to genes objects)], is_exclusive: Boolean [introns exclusive for selected taxa]
-	def initialize(genes, consensus_val, is_merged_pattern, is_statistics, taxonomy_options)
+	def initialize(genes, consensus_val, is_merged_pattern, taxonomy_options)
 		# @aligned_genes = detect_conserved_introns(genes)
 		@genes = genes
 
@@ -45,10 +45,9 @@ class GeneAlignment
 		@ind_consensus_pattern = nil
 		@ind_merged_pattern = nil
 		@ind_tax_pattern = nil
-		@stats_per_intron_pos = {}
 		
 		# convert_to_exon_intron_pattern overwrites also @ind_consensus_pattern, @ind_merged_pattern, @ind_tax_pattern if neccessary
-		@aligned_genestructures = convert_to_exon_intron_pattern(consensus_val, is_merged_pattern, is_statistics, taxonomy_options) # are of same order as @genes !!!
+		@aligned_genestructures, @stats_per_intron_pos = convert_to_exon_intron_pattern(consensus_val, is_merged_pattern, taxonomy_options) # are of same order as @genes !!!
 		@reduced_aligned_genestructures = reduce_exon_intron_pattern # reduce gene structures to "needed" parts 
 
 		@n_structures = @aligned_genestructures.size
@@ -58,7 +57,7 @@ class GeneAlignment
 	# exon representation: "-", intron representation: phase
 	# output
 	# Array of strings: exon intron pattern plotted onto the aligned sequence
-	def convert_to_exon_intron_pattern(consensus_val, is_merged_pattern, is_statistics, taxonomy_options)
+	def convert_to_exon_intron_pattern(consensus_val, is_merged_pattern, taxonomy_options)
 		# collect the exon_intron_patterns of each gene, also for merged/consensus
 
 		patterns = Array.new(@genes.size)
@@ -67,8 +66,8 @@ class GeneAlignment
 		intron_pos_with_annotation = Hash.new { |h,k| h[k] = { n_introns: 0, phase: "?", genes: [] } }
 
 		# parse taxonomy input
-		genes_within_selected_taxa = taxonomy_options[:genes_within_taxa] || []
-		is_intron_exclusive_for_taxa = taxonomy_options[:is_exclusive]
+		genes_belonging_to_selected_taxa = taxonomy_options[:genes_belonging_to_selected_taxa]
+		is_intron_exclusive_for_taxa = taxonomy_options[:is_intron_exclusive_for_selected_taxa]
 
 		@genes.each_with_index do |gene, ind|
 			patterns[ind] = gene.plot_intron_phases_onto_aligned_seq(@exon_placeholder, @intron_placeholder)
@@ -88,18 +87,15 @@ class GeneAlignment
 			patterns << generate_merged_profile( intron_pos_with_annotation, pattern_length )
 			@ind_merged_pattern = patterns.size - 1 # indices start with 0
 		end
-		if genes_within_selected_taxa.any? then
+		if genes_belonging_to_selected_taxa.any? then
 			pattern_length = patterns[0].size
-			patterns << generate_taxonomy_pattern( intron_pos_with_annotation, genes_within_selected_taxa, is_intron_exclusive_for_taxa, 
+			patterns << generate_taxonomy_profile( intron_pos_with_annotation, 
+				genes_belonging_to_selected_taxa, is_intron_exclusive_for_taxa, 
 				pattern_length )
 			@ind_tax_pattern = patterns.size - 1 # indices start with 0
 		end
-		if is_statistics then 
-			# stats also include phase information, which are currently not used
-			@stats_per_intron_pos = intron_pos_with_annotation
-		end
 
-		return patterns
+		return patterns, intron_pos_with_annotation
 	end
 
 	# methods for "statistics per intron position and statistics: merged/consensus/taxonomy profile"
@@ -132,19 +128,19 @@ class GeneAlignment
 		end
 		return merged_pattern
 	end
-	def get_empty_pattern(len)
-		return @exon_placeholder * len
-	end
-	def generate_taxonomy_pattern( intron_pos_with_annotation, genes_within_selected_taxa, is_intron_exclusive_for_taxa, pattern_length )
+	def generate_taxonomy_profile( intron_pos_with_annotation, genes_in_selected_taxa, is_intron_exclusive_for_taxa, pattern_length )
 		tax_pattern = get_empty_pattern(pattern_length)
 
 		intron_pos_with_annotation.each do |intronpos, info|
-			if ( is_intron_exclusive_for_taxa && (genes_within_selected_taxa == info[:genes]) ) ||
-				( ! is_intron_exclusive_for_taxa && (genes_within_selected_taxa & info[:genes]).any? ) then
+			if ( is_intron_exclusive_for_taxa && info[:genes].is_subset?(genes_in_selected_taxa) ) ||
+				( ! is_intron_exclusive_for_taxa && info[:genes].is_overlapping_set?(genes_in_selected_taxa) ) then 
 				tax_pattern[intronpos] = info[:phase]
 			end
 		end
 		return tax_pattern
+	end
+	def get_empty_pattern(len)
+		return @exon_placeholder * len
 	end
 	# end methods for statistics
 
@@ -160,7 +156,7 @@ class GeneAlignment
 	def convert_string_to_chopped_fasta_header(str)
 		# add ">" at beginning of string
 		# left justify string to certain length
-		(">" << str).ljust(self.class.max_length_gene_name)
+		(">" << str)[0...self.class.max_length_gene_name].ljust(self.class.max_length_gene_name)
 	end
 
 	def replace_exon_intron_placeholders_in_structure(struct, exon_placeholder_final, intron_placeholder_final)
@@ -336,61 +332,105 @@ class GeneAlignment
 		return output1, output2
 	end
 
-	def export_as_taxonomy(bla)
-		# compare consensus pattern of every node with the consensus pattern of every node before (direction to root)
+	def export_as_taxonomy(taxonomy_obj)
 
-		# wie zusammenspiel mit anderen tax -optionen???
+		taxa_objects = taxonomy_obj.taxa_with_tax_obj
 
-	end
+		sorted_last_common_ancestors = taxa_objects.sort_by{|_k,v| v.distance_to_root}.collect do |taxon, tax_obj|
+			taxon if tax_obj.is_last_common_ancestor? 
+		end.compact
 
-	def export_as_statistics(ancestors_of_each_gene)
+		pattern_length = @aligned_genestructures[0].size
 
-		# output contains of
-		# 1) exon-intron patterns which labels each intron position with an number
-		# 2) information about each intron position: number of introns , last common ancestor, ancestor following the LCA
+		patterns = assign_introns_to_taxonomic_profiles( taxonomy_obj, sorted_last_common_ancestors, pattern_length )
 
-		# collect data for output
-		# => for each pattern:  pattern with blanks & legend-like lines
-		genestructures_with_legend = exon_intron_pattern_with_spaces_and_legend_for_intron_numbers
+		# reduce output patterns
+		output = Sequence.remove_common_gaps(patterns,
+			{is_alignment: false, # input is not fasta-formatted alignment
+			gap_symbol: @exon_placeholder} # use placeholder as gap-symbol
+			)
 
-		# => for each intron position: lca, list with first ancestors after lca with n_genes having this
-		infos_per_intronpos = Array.new( @stats_per_intron_pos.size  + 1)
-		infos_per_intronpos[0] = "Intron number\t # introns\t last comman ancestor; first ancestors after the last common ancestor (if applicable)"
-		@stats_per_intron_pos.keys.sort.each_with_index do |intron_pos, ind|
-			# ind is number of intron, not number of introns occuring at this position
-
-			ind_info_arr = ind + 1
-			one_based_ind = Helper.ruby2human_counting(ind) # by change, this is the same as ind_info_arr ... but its cleaner with 2 vars
-
-			n_introns = @stats_per_intron_pos[intron_pos][:n_introns]
-
-			genes = @stats_per_intron_pos[intron_pos][:genes]
-			if ancestors_of_each_gene then 
-				ancestors_of_these_genes = genes.collect{ |g| ancestors_of_each_gene[g] }
-				ancestors_of_these_genes.delete_if{|sub_arr| sub_arr == [] }
-			else
-				ancestors_of_these_genes = []
-			end
-
-			if ancestors_of_these_genes.any? then 
-				last_common = Taxonomy.last_common_ancestor_of_genes(ancestors_of_these_genes)
-				first_uniq_list = Taxonomy.first_uniq_ancestors_of_genes(ancestors_of_these_genes)
-				first_uniq_freq = Helper.word_frequency(first_uniq_list)
-				first_uniq_pretty_arr = []
-				# sort frequencies in reverse order
-				first_uniq_freq.sort_by {|_k,v| v}.reverse.each do |word, freq|
-					first_uniq_pretty_arr << "#{word} (#{freq})"
-				end
-
-				# save infos for this intron position
-				infos_per_intronpos[ind_info_arr] = "#{one_based_ind}\t#{n_introns}\t#{last_common}; #{first_uniq_pretty_arr.join(", ")}"
-			else
-				infos_per_intronpos[ind_info_arr] = "#{one_based_ind}\t#{n_introns}\tNo information about taxonomy."
-			end
-
+		# add taxon name to each pattern
+		sorted_last_common_ancestors.each_with_index do |taxon, ind|
+			name = convert_string_to_chopped_fasta_header(taxon)
+			struct = output[ind]
+			output[ind] = [name, struct].join("")
 		end
 
-		return [ genestructures_with_legend, infos_per_intronpos ].join("\n")
+		return output.join("\n")
+	end
+
+	# assign every intron to its last common ancestor
+	# 	in which genes does intron occur?
+	# 	if all genes belong to single species, then print intron into species-pattern
+	# 	if genes belong to different species, print to lca of this species
+	def assign_introns_to_taxonomic_profiles( taxonomy_obj, sorted_last_common_ancestors, pattern_length )
+
+		output = Array.new( sorted_last_common_ancestors.size ) { get_empty_pattern(pattern_length) }
+
+		@stats_per_intron_pos.each do |intronpos, introninfo|
+			genes_with_intron = introninfo[:genes]
+
+			species_encoding_this_genes = taxonomy_obj.get_species_by_genes(genes_with_intron)
+
+			taxa_being_last_common_ancestor_of_species = taxonomy_obj.get_last_common_ancestor_of(species_encoding_this_genes)
+
+			ind_output = sorted_last_common_ancestors.index(taxa_being_last_common_ancestor_of_species)
+			output[ind_output][intronpos] = introninfo[:phase]
+
+		end
+		return output
+	end
+
+	def export_as_statistics(taxonomy_obj)
+
+		# taxonomy or not?
+		# if no taxonomy: simply list number of introns at each position
+
+		# prepare output:
+		# - reduced_genestructures and legend (to number the introns according to their position)
+		# - info about each intron position
+		genestructures_with_legend = exon_intron_pattern_with_spaces_and_legend_for_intron_numbers
+		sorted_intron_positions = @stats_per_intron_pos.keys.sort
+
+		info_per_intronpos = Array.new( @stats_per_intron_pos.size + 1 ) # +1 for header
+		info_per_intronpos[0] = "Intron number\t# introns"
+		if taxonomy_obj then
+			info_per_intronpos[0] += "\tlast common ancestor of corresponding genes\tfirst unique ancestor of corresponding genes"
+		end
+		# collect info for each intron
+		sorted_intron_positions.each_with_index do |intronpos, ind_intron|
+			human_readable_intron_index = Helper.ruby2human_counting(ind_intron)
+			index_info_output_array = human_readable_intron_index # ind_intron +1 because first line in output is header
+			
+			introninfo = @stats_per_intron_pos[intronpos]
+			n_introns = introninfo[:n_introns]
+			info_per_intronpos[index_info_output_array] = human_readable_intron_index.to_s + "\t" + n_introns.to_s
+
+			if taxonomy_obj then 
+				# add info about taxonomy
+
+				genes_with_intron = introninfo[:genes]
+				species_encoding_this_genes = taxonomy_obj.get_species_by_genes(genes_with_intron)
+
+				taxa_being_last_common_ancestor_of_species = taxonomy_obj.get_last_common_ancestor_of(species_encoding_this_genes)
+				taxa_being_first_uniq_ancestor_of_species, occurences_of_taxa = 
+					taxonomy_obj.get_first_uniq_ancestors_with_frequencies_by_genes(genes_with_intron, 
+					taxa_being_last_common_ancestor_of_species
+				)
+				first_uniq_with_occurence_list = []
+				# join first uniq and its occurence
+				taxa_being_first_uniq_ancestor_of_species.each_with_index do |taxon, ind|
+					occurence = occurences_of_taxa[ind]
+					first_uniq_with_occurence_list.push( "#{taxon} (#{occurence})" )
+				end
+
+				info_per_intronpos[index_info_output_array] += 
+					"\t" + taxa_being_last_common_ancestor_of_species + "\t" + first_uniq_with_occurence_list.join(", ")
+			end
+		end
+
+		return [genestructures_with_legend, info_per_intronpos].join("\n")
 
 	end
 

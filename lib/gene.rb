@@ -1,7 +1,7 @@
 # a gene consists of exons and introns
 
 class Gene
-	attr_accessor :aligned_seq, :exons, :introns
+	attr_accessor :aligned_seq, :exons, :introns, :taxonomy
 	attr_reader :name
 
 	def initialize(name)
@@ -20,6 +20,10 @@ class Gene
 		@introns.each do |intron|
 			intron.set_variables_describing_intron_in_aligned_seq(aligned_seq)
 		end
+	end
+
+	def add_taxonomy(tax_obj)
+		@taxonomy = tax_obj
 	end
 
 	# range might be positive or negative range: keep only range or keep everything but range
