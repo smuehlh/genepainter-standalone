@@ -63,7 +63,11 @@ end
 # make sure all _needed_ aligned sequences are of same length
 common_aligned_seqs = Sequence.ensure_seqs_have_same_length(aligned_seqs, aligned_seqs_names, common_names)
 # remove common gaps if neccessary
-common_aligned_seqs = Sequence.remove_common_gaps(common_aligned_seqs, {is_alignment: true}) if options[:ignore_common_gaps]
+if options[:ignore_common_gaps] then 
+	common_aligned_seqs = Sequence.remove_common_gaps(common_aligned_seqs, 
+		{keep_one_common_gap_of_each_set: false, insert_common_gap_between_non_gaps: false} # remove all common gaps, and never add common gaps
+	) 
+end
 
 # special case: gap before/after intron
 # correct intron position (default: before gap) if there is any other sequence with and intron at same pos as gap-end
@@ -148,7 +152,8 @@ gene_alignment_obj = GeneAlignment.new(gene_objects,
 	options[:merge], 
 	{ genes_belonging_to_selected_taxa: genes_belonging_to_selected_taxa || [], 
 		is_intron_exclusive_for_selected_taxa: options[:tax_options][:is_exclusive] || false 
-	}
+	},
+	options[:is_long_text_based_output]
 	)
 puts " done."
 

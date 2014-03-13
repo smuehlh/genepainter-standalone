@@ -13,6 +13,9 @@ class GeneAlignment
 	def self.max_length_gene_name
 		return 20
 	end
+	def self.max_introns_for_long_reduced_output
+		return 50
+	end
 	def self.suffix_structure_in_alignment
 		return "_structure"
 	end
@@ -34,8 +37,9 @@ class GeneAlignment
 	# Boolean: calculate a merged pattern
 	# Boolean: calculate statistics
 	# Hash taxonomy_options: genes_within_taxa: Array [subset of gene.names (belong to genes objects)], is_exclusive: Boolean [introns exclusive for selected taxa]
-	def initialize(genes, consensus_val, is_merged_pattern, taxonomy_options)
-		# @aligned_genes = detect_conserved_introns(genes)
+	# Boolean: reduced exon-intron pattern contains no common gaps at all or one of each series
+	def initialize(genes, consensus_val, is_merged_pattern, taxonomy_options, sep_introns_in_plaintext_output)
+
 		@genes = genes
 
 		@exon_placeholder = "-"
@@ -48,8 +52,8 @@ class GeneAlignment
 		
 		# convert_to_exon_intron_pattern overwrites also @ind_consensus_pattern, @ind_merged_pattern, @ind_tax_pattern if neccessary
 		@aligned_genestructures, @stats_per_intron_pos = convert_to_exon_intron_pattern(consensus_val, is_merged_pattern, taxonomy_options) # are of same order as @genes !!!
-		@reduced_aligned_genestructures = reduce_exon_intron_pattern # reduce gene structures to "needed" parts 
-
+		@reduced_aligned_genestructures = reduce_exon_intron_pattern(sep_introns_in_plaintext_output) # reduce gene structures to "needed" parts 
+		
 		@n_structures = @aligned_genestructures.size
 	end
 
@@ -144,13 +148,23 @@ class GeneAlignment
 	end
 	# end methods for statistics
 
-	def reduce_exon_intron_pattern
+	def reduce_exon_intron_pattern(sep_introns_in_plaintext_output)
+
+		@is_separate_introns_in_textbased_output = sep_introns_in_plaintext_output 
+		if @is_separate_introns_in_textbased_output.nil? then 
+			if @stats_per_intron_pos.keys.size > self.class.max_introns_for_long_reduced_output then 
+				@is_separate_introns_in_textbased_output = false
+			end	
+		end
+
 		# important: duplicate the pattern ! 
 		patterns = @aligned_genestructures.map {|ele| ele.dup}
+
 		Sequence.remove_common_gaps(patterns,
-			{is_alignment: false, # input is not fasta-formatted alignment
+			{keep_one_common_gap_of_each_set: @is_separate_introns_in_textbased_output, # remove all (but one) consecutive common gaps 
 			gap_symbol: @exon_placeholder} # use placeholder as gap-symbol
 			)
+		return patterns
 	end
 
 	def convert_string_to_chopped_fasta_header(str)
@@ -346,7 +360,7 @@ class GeneAlignment
 
 		# reduce output patterns
 		output = Sequence.remove_common_gaps(patterns,
-			{is_alignment: false, # input is not fasta-formatted alignment
+			{keep_one_common_gap_of_each_set: @is_separate_introns_in_textbased_output, # remove all (but one ) common gaps (of a series)
 			gap_symbol: @exon_placeholder} # use placeholder as gap-symbol
 			)
 
@@ -465,7 +479,7 @@ class GeneAlignment
 
 		output[-1] = [ convert_string_to_chopped_fasta_header( "Intron number" ), legend ].join("")
 		# remove common gaps from structures
-		output = Sequence.remove_common_gaps(output, {is_alignment: false})
+		output = Sequence.remove_common_gaps(output, {keep_one_common_gap_of_each_set: @is_separate_introns_in_textbased_output})
 
 		# replace "-" with " " to prettify the legend-string
 		output[-1] = output[-1].gsub("-", " ")

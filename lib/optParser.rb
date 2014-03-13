@@ -33,6 +33,7 @@ class OptParser
 		options[:output_format_list] = ["txt_simple"] # which output should be generated
 		options[:range] = [] # restrict input alignment: use only "columns" within range
 		options[:ignore_common_gaps] = true # restrict input alignment: ignore gaps common to all sequences
+		options[:is_long_text_based_output] = nil # text-based output contains one common gap between two introns
 		options[:consensus] = false # add consenus profile to output ?
 		options[:merge] = false # add merged profile to output ?
 
@@ -237,6 +238,12 @@ class OptParser
 				"Plot introns always onto beginning of a gap",
 				"Default: Align introns if their position differs by alignment gaps only") do 
 				options[:best_intron_pos] = false
+			end
+
+			opts.on("--[no-]separate-introns-in-textbased-output", 
+				"(Not) Separate each consecutive pair of introns by an exon placeholder in text-based output formats.",
+				"Default: Separate introns unless the output lines get too long.") do |opt|
+				options[:is_long_text_based_output] = opt
 			end
 	
 			opts.separator ""

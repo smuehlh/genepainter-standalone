@@ -2,7 +2,7 @@
 
 require 'optparse'
 require 'timeout'
-require 'ruby-debug'
+require File.join(File.expand_path("..",File.dirname(__FILE__)), 'lib', 'helper.rb')
 
 def parse(args)
 
