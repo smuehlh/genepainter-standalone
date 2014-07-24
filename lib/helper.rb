@@ -27,6 +27,12 @@ module Helper
 		end
 	end
 
+	def dir_writable_or_die(path)
+		if ! File.writable?(File.expand_path(path)) then 
+			abort "Directory #{path} is not writable."
+		end
+	end
+
 	def file_exist_or_die(path)
 		if ! FileTest.file?(path) then
 			abort "File #{path} does not exist."
@@ -53,7 +59,7 @@ module Helper
 
 		# write to log file which seqs and genes exactly are used
 		log ""
-		log "Used #{common.join(", ")} genes for computation."
+		log "Using #{common.join(", ")} genes for computation."
 
 	end
 
@@ -61,21 +67,32 @@ module Helper
 	def print_intersect_and_diff_between_taxonomy_genes_and_selected_taxa(all_genes, genes_with_taxonomy, selected_taxa, genes_within_selected_taxa)
 		missing_tax = all_genes - genes_with_taxonomy
 		puts ""
+
+		# simultaniously write to log 
+		log ""
 		if missing_tax.any? then
 			puts "No taxonomy for: #{missing_tax.join(", ")}."
 		end
 		if genes_with_taxonomy.any? then 
 			puts "Taxonomy for: #{genes_with_taxonomy.join(", ")}."
+			log "Genes with taxonomic information: #{genes_with_taxonomy.join(", ")}."
 		end
 		if genes_within_selected_taxa.any? then
 			puts "Genes belonging to selected taxa >#{selected_taxa.join(", ")}<: #{genes_within_selected_taxa.join(", ")}"
+			log "Genes belonging to selected taxa #{selected_taxa.join(", ")}: #{genes_within_selected_taxa.join(", ")}"
 		end
+	end
 
-		# write to log 
+	# inform which data are used after selection is applied 
+	def print_selection(gene_names, selection_type, selection_criterium)
+		puts ""
+		puts "Appling selection to #{selection_type} based on #{selection_criterium}."
+		puts "Restricting data set to #{gene_names.join(", ")}."
+		puts "Using #{gene_names.size} sequences."
+
 		log ""
-		log "Genes with taxonomic information: #{genes_with_taxonomy.join(", ")}."
-		log "Genes belonging to selected taxa #{selected_taxa.join(", ")}: #{genes_within_selected_taxa.join(", ")}"
-
+		log "Appling selection to #{selection_type} based on #{selection_criterium}."
+		log "Using #{gene_names.join(", ")} genes for computation."
 	end
 
 	# sub_str can be either a string or a regex
@@ -109,6 +126,11 @@ module Helper
 		res.delete(nil)
 		return res
 	end
+
+	def sanitize_taxon_name(str)
+		str = str.gsub(/\s/, '.')
+		return str.gsub('[^A-Za-z0-9_\.\-]', '').gsub('..', '.')
+	end
 end
 
 class Array
@@ -135,14 +157,18 @@ class Array
 		return false if other_arr.size < size
 		all? { |obj| other_arr.include?(obj) }
 	end
+	# mimics set method "disjoint?"
+	def is_disjoint_set?(other_arr)
+		! is_overlapping_set?(other_arr)
+	end
 	# mimics set method "intersect?"
 	def is_overlapping_set?(other_arr)
-		(self & other_arr).any?
-		# if size < other_arr.size then 
-		# 	any? { |obj| other_arr.include?(obj) }
-		# else
-		# 	other_arr.any? { |obj| include?(obj) }
-		# end
+		# (self & other_arr).any?
+		if size < other_arr.size then 
+			any? { |obj| other_arr.include?(obj) }
+		else
+			other_arr.any? { |obj| include?(obj) }
+		end
 	end
 	def intersection(other_arr)
 		self & other_arr

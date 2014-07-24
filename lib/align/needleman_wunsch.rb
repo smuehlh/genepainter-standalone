@@ -1,6 +1,6 @@
-# require_relative 'basic_scoring'
-# require_relative 'pairwise_algorithm'
-# require_relative 'blosum62'
+require_relative 'basic_scoring'
+require_relative 'pairwise_algorithm'
+require_relative 'blosum62'
 
 # Copyright (c) 2011 Michael Ryan
 # Downloaded from https://rubygems.org/gems/align; 01-15-2014

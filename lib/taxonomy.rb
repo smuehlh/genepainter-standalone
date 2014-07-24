@@ -1,26 +1,18 @@
 class Taxonomy
 
-	# a species has itself as child and is last common ancestor of itself
-	# species has empty descendants-list
-	# this is to assure that genes specific for a species can be assigned to this species like to an "real"(=inner node) last common ancestor
 	attr_reader :name, 
-		:ancestor, :descendants, 
-		:distance_to_root, :children, :last_common_ancestor_of
+		:ancestor, :descendants, :last_common_ancestor_of, :leaves_below_this_node
 
 	# input
 	# name - taxon name
 	# ancestor - ancestor name 
 	# descendant - descendant name (descendants is list); empty if species
-	# distance_to_root - [Int] number of nodes from here to root
-	# child - [String] added to children list (=leaves below to this node) ; if taxon is an species, its its own child
-	def initialize(name, ancestor, descendant, distance_to_root, child)
+	def initialize(name, ancestor, descendant)
 		@name = name
 		@ancestor = ancestor
 		@descendants = init_descendants(descendant)
-		@distance_to_root = distance_to_root
-		@children = [child]
-
 		@last_common_ancestor_of = init_last_common_ancestor
+		@leaves_below_this_node = []
 	end
 
 	# a species should have no descendants
@@ -34,15 +26,11 @@ class Taxonomy
 
 	# a species should be its own last common ancestor
 	def init_last_common_ancestor
-		if is_species? then
+		if is_leaf? then
 			return [ @name ]
 		else
 			return []
 		end
-	end
-
-	def add_child(child)
-		@children |= [ child ]
 	end
 
 	def add_lca(child)
@@ -53,12 +41,26 @@ class Taxonomy
 		@descendants |= [ child ] if ! child.empty?
 	end
 
-	def is_species?
-		@descendants.empty?
+	def remove_descendant(child)
+		@descendants.delete(child)
 	end
 
-	def is_last_common_ancestor?
-		@last_common_ancestor_of.any?
+	def set_ancestor(ancestor)
+		@ancestor = ancestor
+	end
+
+	def add_leaves(child_list)
+		@leaves_below_this_node |= Array(child_list) # Array for smart conversion to array
+	end
+
+	def is_leaf?
+		@descendants.empty?
+	end
+	def is_last_common_ancestor_of?(species)
+		@last_common_ancestor_of.include?(species)
+	end
+	def is_root?
+		@ancestor.empty?
 	end
 
 end

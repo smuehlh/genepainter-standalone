@@ -55,6 +55,11 @@ module Sequence
 				end
 			end
 		end
+		names.delete("")
+		seqs.delete("")
+		if names.size != seqs.size then
+			Helper.abort "Error while parsing multiple sequence alignment. Number of fasta header and sequences does not match." 
+		end
 		return names, seqs
 	end
 
@@ -100,70 +105,102 @@ module Sequence
 
 		return used_seqs
 	end
-	
-	# remove common gaps from seqs-array
-	# input:
-	# seqs [Array] Array of strings, strings should be of same length!
-	# opts [Hash]: keep_one_common_gap_of_each_set [Boolean] -> default true
-	# 	if true, one common gap of a sequence of common gaps is left and gaps are created whereever necessary
-	# 	if false, all common gaps are removed
-	# opts [Hash]: insert_common_gap_between_non_gaps [Boolean] -> defaults to keep_one_common_gap_of_each_set
-	# 	if true, one common gap is inserted between each consecutive cols being no common-gap cols
-	# 	if false, no such gaps are inserted
-	# opts [Hash]: gap_symbol [String] -> default: "-" The symbol treated as common gap
-	# opts [Hash]: start_col [Integer] -> default: 0 The first column to be searched for common gaps
-	def remove_common_gaps(seqs, opts = {})
 
-		# set options or default parameters
-		if opts[:keep_one_common_gap_of_each_set].nil? then
-			is_keep_one_gap = true
-		else
-			is_keep_one_gap = opts[:keep_one_common_gap_of_each_set]
-		end
-		if opts[:insert_common_gap_between_non_gaps].nil? then
-			is_add_one_gap = is_keep_one_gap
-		else
-			is_add_one_gap = opts[:insert_common_gap_between_non_gaps]
-		end
+	# remove common gaps from seqs - array
+	# seqs [Array]: array of strings, each string must be of same length
+	# opts [Hash]: options, each has a default value
+	# 			key gap_symbol [String]: symbol treated as common gap. Must have length 1, default: "-"
+	# 			key start_col [Integer]: First column to be searched for common gaps, default: 0
+	# 			key delete_all_common_gaps [Boolean]: delete all common gaps or keep one of each consecutive common gaps, default: false
+	# 			key ensure_common_gap_between_consecutive_non_gaps [Boolean]: always have one common gap between two non-gaps, default: true
+	# 																			only applicable in combination with delete_all_common_gaps == false
+	def remove_common_gaps(seqs, opts={})
 		gap_symbol = opts[:gap_symbol] || "-"
 		start_col = opts[:start_col] || 0
-
-
-		last_col = seqs.first.size # all seqs should be of same size ...
-
-		is_only_gaps_this_col, is_only_gaps_after_this_col = nil, nil # "col after"
-
-		# inspect ever pair of consecutive columns
-		# find out if current col contains only gaps, and delete it if so
-		(last_col-1).downto(start_col) do |col|
-
-			content_this_col = seqs.collect { |seq| seq[col] }
-			is_only_gaps_this_col = is_array_of_common_gaps(content_this_col, gap_symbol)
-
-			if is_only_gaps_this_col then 
-				# column contains only gaps. check requirements if it should be deleted
-
-				if is_keep_one_gap then 
-					#  delete only those columns of common gaps, which are followed by common gap 
-					if is_only_gaps_after_this_col then 
-						seqs.each { |seq| seq.slice!(col) }
-					end
-				else
-					# delete every column of common gaps, regardless the surronding columns
-					seqs.each { |seq| seq.slice!(col) }
-				end
-			else
-				# column contains also non-gaps. check if a column of common gaps should be added
-				if is_add_one_gap && ! is_only_gaps_after_this_col then 
-					seqs.each { |seq| seq.insert(col+1, gap_symbol) }	
-				end
+		is_delete_all_common_gaps = false # default: keep one common gap of consecutive ones
+		is_always_common_gap_between_two_non_gaps = nil # this option becomes only active when is_delete_all_common_gaps = false
+		if opts[:delete_all_common_gaps] then 
+			is_delete_all_common_gaps = true
+		else
+			is_delete_all_common_gaps = false
+			is_always_common_gap_between_two_non_gaps = true # default: always have a common gap between two non-gaps (insert one if need is)
+			if opts.has_key?(:ensure_common_gap_between_consecutive_non_gaps) &&
+				opts[:ensure_common_gap_between_consecutive_non_gaps] == false then 
+				is_always_common_gap_between_two_non_gaps = false
 			end
-
-			# this column will be column after the current column in next iteration
-			is_only_gaps_after_this_col = is_only_gaps_this_col
 		end
 
-		return seqs
+		reduced_seqs = seqs.map {|ele| ele.dup} # iterate of this set of sequences to keep the input seqs unchanged
+		last_col = reduced_seqs.first.size
+		last_col_to_keep = last_col-1 # -1: index starts with 0
+
+		(last_col-1).downto(start_col) do |col|
+			content_this_col = reduced_seqs.collect { |seq| seq[col] }
+			is_only_gaps_this_col = is_array_of_common_gaps(content_this_col, gap_symbol)
+
+			if is_delete_all_common_gaps then 
+				# delete all columns of common gaps, no matter what
+
+				if is_only_gaps_this_col then 
+					reduced_seqs.each { |seq| seq.slice!(col) }
+				end
+			else
+				# delete all consecutive common gaps but one
+			
+				if ! is_only_gaps_this_col then
+					# column contains also non-gaps
+
+					# reduce consecutive common-gap cols to one colum
+					n_cols_to_del = last_col_to_keep - col - 1 # -1: keep always one col
+					reduced_seqs.each{ |seq| seq.slice!(col+1,n_cols_to_del) }
+
+					if is_always_common_gap_between_two_non_gaps && 
+						( col == last_col_to_keep ) then 
+
+						# this is a non-gap col, after this col in string is another non-gap col: separate them by common gap
+						reduced_seqs.each { |seq| seq.insert(col+1, gap_symbol) }
+					end
+					if ! is_always_common_gap_between_two_non_gaps then 
+	
+						# this is a non-gap col, 2 cols after this col (in string) is another non-gap col
+						# if the non-gap is not in same sequence, delete the common-gap-col in between
+						is_non_gap_in_same_seq = false
+						reduced_seqs.each do |seq|
+							if seq[col] != gap_symbol && seq[col+2] && seq[col+2] != gap_symbol then 
+								is_non_gap_in_same_seq = true
+								break
+							end
+						end
+						if ! is_non_gap_in_same_seq then 
+							# its safe to delete common gap in between
+							reduced_seqs.each{ |seq| seq.slice!(col+1) }
+						end
+					end
+
+					# set the col to keep to column preceeding (in the string) this one!
+					last_col_to_keep = col - 1 
+				end
+			end			
+		end
+		if ! is_delete_all_common_gaps then 
+			# reduce consecutive common gaps to one col
+			n_cols_to_del = last_col_to_keep - start_col # not -1 because col itself it the column to always keep
+			reduced_seqs.each { |seq| seq.slice!(start_col,n_cols_to_del) }
+
+			# ensure that reduced_seqs always start with common gap
+			first_col = reduced_seqs.collect { |seq| seq[start_col] }
+			if ! is_array_of_common_gaps(first_col, gap_symbol) then 
+				reduced_seqs.each { |seq| seq.insert(start_col, gap_symbol) }
+			end
+
+			# ensure that reduced_seqs always end with common gap
+			last_col = reduced_seqs.collect { |seq| seq[-1] }
+			if ! is_array_of_common_gaps(last_col, gap_symbol) then 
+				reduced_seqs.each { |seq| seq.insert(-1, gap_symbol) }
+			end
+		end
+
+		return reduced_seqs
 	end
 
 	def is_array_of_common_gaps(arr, gap_symbol="-")

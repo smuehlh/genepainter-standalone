@@ -1,7 +1,8 @@
-# require_relative 'basic_scoring'
+require_relative 'basic_scoring'
 
 module Align
   # Score two characters based on BLOSUM62 matrix
+  require_relative 'basic_scoring.rb' 
   class Blosum62 < BasicScoring
     # @param [Numeric] align_match Price for alignment -> actually not needed; is defined by BLOSUM matrix
     # @param [Numeric] align_mismatch Penalty for misalignment -> actually not needed; is defined by BLOSUM matrix

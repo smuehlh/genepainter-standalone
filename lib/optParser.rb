@@ -27,13 +27,14 @@ class OptParser
 		options[:path_to_genestruct] = nil # input: gene structures
 
 		# optional parameters
-		options[:path_to_output] = "genepainter" # output file
+		options[:path_to_output] = "" # path to output files including file prefix
 		options[:path_to_log] = "genepainter.log" # log file
+		options[:output_basename], options[:output_basepath] = "genepainter", "" # default prefix: "genepainter", located in genepainter source directory
 
 		options[:output_format_list] = ["txt_simple"] # which output should be generated
 		options[:range] = [] # restrict input alignment: use only "columns" within range
 		options[:ignore_common_gaps] = true # restrict input alignment: ignore gaps common to all sequences
-		options[:is_long_text_based_output] = nil # text-based output contains one common gap between two introns
+		options[:is_long_text_based_output] = true # text-based output contains one common gap between two introns
 		options[:consensus] = false # add consenus profile to output ?
 		options[:merge] = false # add merged profile to output ?
 
@@ -43,10 +44,16 @@ class OptParser
 
 		options[:best_intron_pos] = true # align intron positions which differ only by alignment gaps
 
+		options[:selection] = { analyse_all_output_sel: nil, analyse_sel_output_sel: nil, analyse_sel_on_all_output_sel: nil, no_selection: nil }
+		options[:select_by] = { regex: nil, list: nil, species: nil, no_selection: nil } # selection criteria: species, list, or regular expression
+
+		# hidden parameters
+		@hidden_params = ["--svg-merged", "--svg-nested"]
+
 
 		opt_parser = OptionParser.new do |opts|
 
-			opts.banner = "\nGenePainter v.1.2 maps gene structures onto multiple sequence alignments"
+			opts.banner = "\nGenePainter v.2.0 maps gene structures onto multiple sequence alignments"
 			opts.separator "Contact: Martin Kollmar (mako[at]nmr.mpibpc.mpg.de)"
 
 			opts.separator ""
@@ -86,36 +93,47 @@ class OptParser
 				"Specify to skip standard output format." ) do
 				options[:output_format_list].delete("txt_simple")
 			end
-
 			opts.on("--alignment",
 				"Output the alignment file with additional lines containing intron phases") do
 				options[:output_format_list] << "alignment_with_intron_phases"
 			end
+			opts.on("--fuzzy N", Integer,
+				"Introns at most N base pairs apart from each other are aligned") do |n_bp|
+				if n_bp > 0 then 
+					options[:output_format_list] << "txt_fuzzy"
+					options[:fuzzy_window] = n_bp
+				else
+					Helper.abort "Invalid argument: --fuzzy expects a number larger than 0"
+				end
+			end
 
 			opts.separator ""
 			opts.separator "Graphical output format:"
-			opts.on("--svg H,W", Array,
-				"Drawn SVG of size height x width") do |list|
-				list = list.map(&:to_i)
-				
-				if list.size != 2 || list.inject(:*) == 0 then
-					# number of args wrong or at least one is zero
-					Helper.abort "Invalid argument: --svg expects two comma-separated numbers without spaces"
-				end
+			opts.on("--svg", 
+				"Drawn a graphical representation of genes in SVG format", 
+				"Per default, detailed representation will be produced", 
+				"Use parameter '--svg-format' to get less details") do |opt|
 				options[:output_format_list] << "svg"
-
-				vivify_hash(options, :svg_options, :size, {height: list[0], width: list[1]} )
 			end
-			svg_formats = ["normal", "reduced"]
+			svg_formats = ["normal", "reduced", "both"]
 			opts.on("--svg-format FORMAT", svg_formats,
 				"FORMAT: #{svg_formats}",
 				"'normal' draws details of aligned exons and introns [default]",
-				"'reduced' focuses on common introns only") do |f|
-				if f == "reduced" then
+				"'reduced' focuses on common introns only", 
+				"'both' draws both formats") do |format|
+				if format == "reduced" then
 					vivify_hash(options, :svg_options, :reduced, true)
+				elsif format == "both"
+					vivify_hash(options, :svg_options, :both, true)
 				else
 					# nothing to do, as 'normal' is default format and already listed as output format
 				end
+			end
+			opts.on("--svg-merged") do |opt|
+				vivify_hash(options, :svg_options, :generate_merged_pattern, true)
+			end
+			opts.on("--svg-nested") do |opt|
+				vivify_hash(options, :svg_options, :generate_nested_svg, true)
 			end
 
 			opts.separator ""
@@ -126,6 +144,9 @@ class OptParser
 				"Two scripts for execution in PyMol are provided:", 
 				"'color_exons.py' to mark consensus exons",
 				"'color_splicesites.py' to mark splice junctions of consensus exons") do |file|
+				if file.start_with?("-") then 
+					Helper.abort "Missing argument for --pdb <file_name>"
+				end
 				options[:output_format_list] << "pdb"
 				vivify_hash(options, :pdb_options, :path_to_pdb, file)
 				Helper.file_exist_or_die(file)
@@ -133,16 +154,28 @@ class OptParser
 			opts.on("--pdb-chain CHAIN", String,
 				"Mark gene structures for chain CHAIN",
 				"[Default: Use chain A]") do |opt|
+				if opt.start_with?("-") then 
+					Helper.abort "Missing argument for --pdb-chain <chain>"
+				end
 				vivify_hash(options, :pdb_options, :pdb_chain, opt)
 			end
 			opts.on("--pdb-ref-prot PROT", String,
 				"Use protein PROT as reference for alignment with pdb sequence", 
 				"[Default: First protein in alignment]") do |n|
+				if n.start_with?("-") then 
+					Helper.abort "Missing argument for --pdb-ref-prot <prot>"
+				end
 				vivify_hash(options, :pdb_options, :pdb_reference_protein, n)
 			end
 			opts.on("--pdb-ref-prot-struct",
 				"Color only intron positions occuring in the reference protein structure.") do |opt|
 				vivify_hash(options, :pdb_options, :pdb_ref_prot_struct_only, true)
+			end
+
+			opts.separator ""
+			opts.on("--tree", 
+				"Generate newick tree file and SVG representation") do |opt|
+				options[:output_format_list] << "tree"
 			end
 
 			opts.separator ""
@@ -168,21 +201,30 @@ class OptParser
 			opts.separator ""
 			opts.separator "Taxonomy:"
 			opts.on("--taxonomy FILE", String,
-				"Mark introns by taxonomy",
-				"NCBI taxonomy database dump file FILE") do |file|
+				"NCBI taxonomy database dump file FILE", 
+				"OR path to extract from NCBI taxonomy:",
+				"Lineage must be semicolon-separated list of taxa from root to species.") do |file|
+				if file.start_with?("-") then 
+					Helper.abort "Missing argument for --taxonomy <file_name>"
+				end
 				vivify_hash(options, :tax_options, :path_to_tax, file)
 				Helper.file_exist_or_die(file)
 			end
 			opts.on("--taxonomy-to-fasta FILE", String,
-				"Text-based file mapping fasta header to species names", 
-				"Gene1[,Gene2]:Species") do |file|
+				"Text-based file mapping gene structure file names to species names", 
+				"Mandatory format:",
+				"One or more genes given as semicolon-separated list and species name",
+				"Delimiter between gene list and species name must be a colon",
+				"The species name itself must be enclosed by double quotes like this \"SPECIES\"") do |file|
+				if file.start_with?("-") then 
+					Helper.abort "Missing argument for --taxonomy-to-fasta <file_name>"
+				end
 				vivify_hash(options, :tax_options, :path_to_tax_mapping, file)
 				Helper.file_exist_or_die(file)
 			end
 			opts.on("--taxonomy-common-to x,y,z", Array, 
 				"Mark introns common to taxa x,y,z", 
-				"List can consist of one taxon only") do |list|
-				options[:output_format_list] << "tax"
+				"List must consist of at least one NCBI taxon") do |list|
 				list = list.map {|str| str.capitalize}
 				vivify_hash(options, :tax_options, :selected_taxa, list)
 			end
@@ -195,13 +237,82 @@ class OptParser
 				"Newly gained introns for every inner node in taxonomy") do |opt|
 				options[:output_format_list] << "extensive_tax"
 			end
+			opts.on("--no-grep", 
+				"Read the NCBI taxomony dump into RAM",
+				"This will require some hundert MBs of RAM additionally",
+				"Default: taxomony dump is parsed with 'grep' calls") do |opt|
+				vivify_hash(options, :tax_options, :no_grep, true)
+			end
+			opts.on("--nice", 
+				"Give grep calls to parse taxonomy dump a lower priority",
+				"Please make sure to have 'nice' in your executable path when using this option") do |opt|
+				vivify_hash(options, :tax_options, :nice_grep, true)
+			end
+
+			opts.separator ""
+			opts.separator "Analysis and output of all or subset of data:"
+			opts.on("--analyse-all-output-all", 
+				"Analyse all data and provide full output [default]") do |opt|
+				options[:selection][:no_selection] = true
+			end
+			opts.on("--analyse-all-output-selection", 
+				"Analyse all data and provide text-based and graphical output for selection only", 
+				"All introns are analysed, including those not present in selection") do |opt|
+				options[:selection][:analyse_all_output_sel] = true
+			end
+			opts.on("--analyse-selection-output-selection", 
+				"Analyse selected data and provide output for selection only") do |opt|
+				options[:selection][:analyse_sel_output_sel] = true
+			end
+			opts.on("--analyse-selection-on-all-data-output-selection", 
+				"Analyse intron positions of selected data in all data and provide output for selection only",
+				"Introns present in selection are analysed in all data") do |opt|
+				options[:selection][:analyse_sel_on_all_output_sel] = true
+			end
+
+			opts.separator("Selection criteria for data and output selection")
+			opts.on("--selection-based-on-regex <\"regex\">", String, 
+				"Regular expression applied on gene structure file names") do |regex|
+				if regex.start_with?("-") then 
+					Helper.abort "Missing argument for --selection-based-on-regex <regex>"
+				end
+				options[:select_by][:regex] = Regexp.new(regex)
+			end
+			opts.on("--selection-based-on-list x,y,z", Array, 
+				"List of gene structures to be used") do |list|
+				options[:select_by][:list] = list
+			end
+			opts.on("--selection-based-on-species <\"species\">", String, 
+				"Use all gene structures associated with species", 
+				"Specify also --taxonomy-to-fasta to map gene structure file names to species names") do |species|
+				if species.start_with?("-") then 
+					Helper.abort "Missing argument for --selection-based-on-species <species>"
+				end
+				options[:select_by][:species] = species
+			end
+			opts.on("--select-all", 
+				"No selection applied (default)") do |opt|
+				options[:select_by][:no_selection] = true
+			end
 
 			opts.separator ""
 			opts.separator "General options:"
 			opts.on("-o", "--outfile <file_name>", String, 
-				"Name of the output file") do |file|
-				options[:path_to_output] = File.basename(file, ".*")
-				options[:path_to_log] = options[:path_to_output] + ".log"
+				"Prefix of the output file(s)", "Default: genepainter") do |file|
+				if file.start_with?("-") then 
+					Helper.abort "Missing argument for --outfile <file_name>"
+				end
+				options[:output_basename] = File.basename(file, ".*")
+			end
+			opts.on("--path-to-output <path>", String, 
+				"Path to location for the output file(s)", 
+				"Default: same location as GenePainter source files") do |path|
+				if path.start_with?("-") then 
+					Helper.abort "Missing argument for --path-to-output <path>"
+				end
+				Helper.dir_exist_or_die(path)
+				Helper.dir_writable_or_die(path)
+				options[:output_basepath] = path
 			end
 
 			opts.on("--range START,STOP", Array,
@@ -216,7 +327,7 @@ class OptParser
 				end
 				# range_start should be smaller than r_stop
 				if range[0] >= range[1] then 
-					Helper.abort "invalid range definition in #{range}: start must be less than than stop"
+					Helper.abort "Invalid range definition in #{range}: start must be less than than stop"
 				end
 				# _end sanity check
 				options[:range]= {
@@ -248,7 +359,8 @@ class OptParser
 	
 			opts.separator ""
 			opts.on_tail("-h", "--help", "Show this message") do 
-				puts opts
+				# delete all hidden params from help
+				show_help(opt_parser.help)
 				exit
 			end
 
@@ -257,7 +369,7 @@ class OptParser
 		## main part of function ##
 		if args.empty? then
 			# display help and exit if program is called without any argument
-			puts opt_parser.help
+			show_help(opt_parser.help) 
 			exit
 		end
 
@@ -272,6 +384,16 @@ class OptParser
 			Helper.abort "Select at least one output format"
 		end
 
+		# genereate the path to output from prefix name and path
+		if options[:output_basepath] != "" then 
+			options[:path_to_output] = File.join(options[:output_basepath], options[:output_basename])
+		else
+			options[:path_to_output] = options[:output_basename]
+		end
+		options[:path_to_log] = options[:path_to_output] + ".log"
+		options.delete(:output_basename)
+		options.delete(:output_basepath)
+
 		# check dependecies
 		# if pdb output should be generated, one of the following options must be set
 		if options[:output_format_list].include?("pdb") then 
@@ -284,17 +406,9 @@ class OptParser
 			end
 		end
 		# if taxonomy should be considered, need taxonomy dump file, mapping fasta to tax file and list of taxa
-		if options[:output_format_list].include?("tax") then
-			if ! (
-				options[:tax_options][:path_to_tax] &&
-				options[:tax_options][:path_to_tax_mapping] &&
-				options[:tax_options][:selected_taxa] ) then
-
-				Helper.abort "Mandatory argument for taxonomy is missing: Specify --taxonomy FILE, --taxonomy-to-fasta FILE and --taxonomy-common-to x,y,z"
-			end
-		end
-		if options[:output_format_list].include?("extensive_tax") then 
-			# don't need list of of taxa, but path to tax and path to tax mapping
+		if options[:tax_options][:selected_taxa] || 
+			options[:output_format_list].include?("extensive_tax") || 
+			options[:output_format_list].include?("tree") then 
 			if ! (
 				options[:tax_options][:path_to_tax] &&
 				options[:tax_options][:path_to_tax_mapping]	) then 
@@ -304,12 +418,45 @@ class OptParser
 		end
 
 		# dont make taxonomy mandatory for statistiscs option!
-
-		# ensure than both for statistics and taxonomy-common-to output, taxonomy file and mapping file are specified
-		if options[:tax_options][:path_to_tax] || options[:tax_options][:path_to_tax_mapping] then 
+		if options[:output_format_list].include?("stats") && 
+			(options[:tax_options][:path_to_tax] || options[:tax_options][:path_to_tax_mapping]) then 
 			if ! ( options[:tax_options][:path_to_tax] && options[:tax_options][:path_to_tax_mapping] ) then
-				Helper.abort "Mandatory argument for taxonomy is missing: Specify --taxonomy FILE, --taxonomy-to-fasta FILE"
+				Helper.abort "Mandatory argument for --statistics in combination with taxonomy is missing: Specify --taxonomy FILE and --taxonomy-to-fasta FILE"
 			end
+		end
+
+		# only one selection type can be selected
+		# need to be combined with one selection criterium
+		if options[:selection][:no_selection] && 
+			(options[:select_by][:regex] || options[:select_by][:list] || options[:select_by][:species]) then 
+				Helper.abort "Invalid usage of --analyse-all-output-all. Cannot be combined with selection criteria."
+		end
+		if options[:select_by][:no_selection] && 
+			(options[:selection][:analyse_sel_output_sel] || 
+				options[:selection][:analyse_sel_on_all_output_sel] || 
+				options[:selection][:analyse_all_output_sel]) then 
+			Helper.abort "Invalid usage of --select-all. Cannot be combined with analysis or output of subset of data."
+		end
+		n_specified_selections = 0
+		options[:selection].each do |opt, val|
+			n_specified_selections += 1 if val
+			Helper.abort "Invalid usage of analysis or output selection options. Specify not more than one criterium." if n_specified_selections > 2
+		end
+		n_specified_selections -= 1 if options[:selection].delete(:no_selection)
+		n_specified_criteria = 0
+		options[:select_by].each do |opt, val|
+			n_specified_criteria += 1 if val
+			Helper.abort "Invalid usage of selection criteria. Specify not more than one criterium." if n_specified_criteria > 2
+		end
+		n_specified_criteria -= 1 if options[:select_by][:no_selection]
+		if n_specified_selections == 1 && n_specified_criteria != 1 then 
+			Helper.abort "Invalid usage of analysis or output selection options. Must be combined with selection criterium."
+		end
+		if n_specified_criteria == 1 && n_specified_selections != 1 then 
+			Helper.abort "Invalid usage of selection criterium. Must be combined with analysis or output selection options."
+		end
+		if options[:select_by][:species] && ! options[:tax_options][:path_to_tax_mapping] then 
+			Helper.abort "Invalid usage of --selection-based-on-species: Must be combined with --taxonomy-to-fasta"
 		end
 
 		return options
@@ -325,5 +472,13 @@ class OptParser
 		end
 		hash[outer_key][inner_key] = inner_val
 	end
+
+	def self.show_help(opts)
+		opts_array = opts.to_s.split("\n")
+		@hidden_params.each do |hidden_param|
+			opts_array.delete_if{ |line| line =~ /#{hidden_param}/ }
+		end
+		puts opts_array.join("\n")
+	end	
 
 end

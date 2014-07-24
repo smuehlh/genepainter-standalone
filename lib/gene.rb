@@ -1,7 +1,7 @@
 # a gene consists of exons and introns
 
 class Gene
-	attr_accessor :aligned_seq, :exons, :introns, :taxonomy
+	attr_accessor :aligned_seq, :exons, :introns, :taxonomic_lineage, :ind_first_uniq_ancestor
 	attr_reader :name
 
 	def initialize(name)
@@ -9,6 +9,9 @@ class Gene
 		@aligned_seq = nil
 		@exons = [] # exon objects in their correct order
 		@introns = [] # intron objects in their correct order
+
+		@taxonomic_lineage = []
+		@ind_first_uniq_ancestor = nil
 	end
 
 	# set instance variable @aligned_seq and also exon/intron position in alignment
@@ -22,8 +25,13 @@ class Gene
 		end
 	end
 
-	def add_taxonomy(tax_obj)
-		@taxonomy = tax_obj
+	# lineage: array, starting with root
+	# ind: the index of the first uniq ancestor of the species in that array -> later replaced by the array element
+	def add_taxonomy(lineage_and_ind_first_uniq_ancestor)
+		lineage = lineage_and_ind_first_uniq_ancestor[:lineage]
+		ind = lineage_and_ind_first_uniq_ancestor[:ind_first_uniq]
+		@taxonomic_lineage = lineage
+		@ind_first_uniq_ancestor = ind 
 	end
 
 	# range might be positive or negative range: keep only range or keep everything but range
@@ -278,7 +286,7 @@ class Gene
 		return all_gap_pos_with_length
 	end
 
-	def get_all_exons_with_length(is_convert_to_nt_length=false)
+	def get_all_exons_with_length
 		# collect start and lenght of each exon
 		if is_convert_to_nt_length then 
 			all_pos_with_length = @exons.collect do |exon|
@@ -361,6 +369,34 @@ class Gene
 		end
 
 		intron_pos_in_alignment.join("")
+	end
+
+	def last_common_ancestor_with_other_gene(other_lineage)
+		# as lineages start with root, the last common element is the last common ancestor
+		return common_lineage_with_other_gene(other_lineage).last
+	end
+
+	def common_lineage_with_other_gene(other_lineage)
+		return @taxonomic_lineage.intersection( other_lineage )
+	end
+	
+	def get_lineage_root_to_first_uniq_ancestor_of_species
+		if has_taxonomic_information then 
+			return @taxonomic_lineage[0..@ind_first_uniq_ancestor] 
+		else
+			return []
+		end
+	end
+
+	def first_uniq_ancestor_of_species
+		if has_taxonomic_information then 
+			return @taxonomic_lineage[@ind_first_uniq_ancestor]
+		else
+			return ""
+		end
+	end
+	def has_taxonomic_information
+		@taxonomic_lineage.any? && @ind_first_uniq_ancestor
 	end
 
 end

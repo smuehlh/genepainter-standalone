@@ -76,4 +76,19 @@ class Intron
 		copy.set_variables_describing_intron_in_aligned_seq(aligned_seq)
 		return copy
 	end
+
+	def self.merge_position_and_phase(pos, phase)
+		pos.to_i + phase.to_i * 0.1
+ 	end
+ 	def self.are_introns_within_range(pos_phase1, pos_phase2, range)
+ 		diff_pos1_pos2 = 
+	 		self.convert_position_and_phase_into_nt_position(pos_phase1) - self.convert_position_and_phase_into_nt_position(pos_phase2)
+	 	return diff_pos1_pos2.abs <= range	
+ 	end
+
+	def self.convert_position_and_phase_into_nt_position(pos_phase)
+ 		arr = pos_phase.divmod(1) # split float into integer and remainder
+ 		return arr.first * 3 + arr.last * 10 # *3 to convert into amino acid count, *10 to convert into nucleotide count
+ 	end
+
 end

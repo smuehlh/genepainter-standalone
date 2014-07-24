@@ -1,35 +1,14 @@
 # draws aligned genes
 class GeneAlignment2svg
 
-	def initialize(aligned_genes, svg_params)
+	def initialize(aligned_genes, is_default_color_scheme, is_nested_svg)
 		@aligned_genes = aligned_genes
-		@svg_size, @is_default_color_scheme = parse_svg_parameters(svg_params)
+		@is_default_color_scheme = is_default_color_scheme
+		@is_nested_svg = is_nested_svg
 
 		@is_most_accurate_output = true # false: much better to understand, although the exon-streches are always at end of featuress
 
 		prepare_genes_for_drawing # sets @all_intronpos_with_maxlength, @max_x_pos_exon, @scaling_factor_introns
-	end
-
-	# params are the parsed command line arguments
-	# extract requested image size and type (normal or reduced) 
-	def parse_svg_parameters(params)
-
-		# size
-		if ! params[:size] then 
-			param_size = { width: nil, height: nil}
-		else
-			param_size = { width: params[:size][:width], height: params[:size][:height] }
-		end
-
-		# type
-		if ! params[:reduced] then 
-			# use the default color scheme if the parameter for the color is not set at all or if it is false
-			is_def_color = true
-		else 
-			is_def_color = false
-		end
-		
-		return param_size, is_def_color
 	end
 
 	# collect all intron positions and the lenght of the longest intron
@@ -92,20 +71,30 @@ class GeneAlignment2svg
 	def create_svg
 
 		svg = []
-		svg << Svg::Painter.header( @svg_size[:width], @svg_size[:height] )
 
 		# need max x-position for scaling: this is result of exons and introns, introns need to be scaled
 		x_pos_max = calc_max_x_pos
-
 		n_genes = @aligned_genes.size
+		y_pos_inside_nested_element = 0.0
 
 		svg_obj = Svg.new(n_genes, x_pos_max, @is_default_color_scheme) # svg object needed for actual drawing
-		@aligned_genes.each_with_index do |gene, y_pos|
+		svg <<  svg_obj.print_header
 
-			# index equals the y_position in the final drawing
+		@aligned_genes.each_with_index do |gene, y_pos_nested_element|
 
-			# draw text
-			svg << svg_obj.print_text(gene.name, y_pos)
+			# index equals the y_position in the final drawing, it is used only in nested svg
+			# all other elements are positions relative to position of nested svg
+
+
+			if @is_nested_svg then 
+			 	svg << svg_obj.print_nested_svg_header(y_pos_nested_element)
+			 	y_pos = y_pos_inside_nested_element
+			else
+			 	y_pos = y_pos_nested_element
+			end
+
+			# draw text, crop text to maximal size
+			svg << svg_obj.print_text( crop_gene_names_for_svg(gene.name), y_pos )
 
 			# draw the background: artificially streches in exons to make the stay aligned
 			background_col = svg_obj.colors[:exon_streched]
@@ -177,16 +166,71 @@ class GeneAlignment2svg
 
 			end
 
+			if @is_nested_svg then 
+				svg << svg_obj.print_nested_svg_footer
+			end
 		end
 
 		# add legend 
+		y_pos_nested_element = @aligned_genes.size + 1
+		if @is_nested_svg then 
+		 	svg << svg_obj.print_nested_svg_header( y_pos_nested_element )
+		 	y_pos = y_pos_inside_nested_element
+		else
+			y_pos = y_pos_nested_element	
+		end
 		length_one_nt_exon = 1/3.0 # exon positions are in amino acid count
 		length_one_nt_intron = 1 * @scaling_factor_introns # intron positions are in nt count, but scaled
-		svg << svg_obj.print_legend( @aligned_genes.size + 1, length_one_nt_exon, length_one_nt_intron )
 
-		svg << Svg::Painter.footer
+		svg << svg_obj.print_legend(y_pos, length_one_nt_exon, length_one_nt_intron )
+
+		if @is_nested_svg then 
+			svg << svg_obj.print_nested_svg_footer
+		end
+
+		svg << svg_obj.print_footer
 
 		return svg.join("\n")
+	end
+
+	def create_svg_merged_genestructure
+		svg = []
+
+		# need max x-position for scaling: this is result of exons and introns, introns need to be scaled
+		x_pos_max = calc_max_x_pos
+		n_genes = 1 # draw only merged structure
+		y_pos = 0 # y_pos needs to start with 0
+
+		svg_obj = Svg.new(n_genes, x_pos_max, @is_default_color_scheme, true) # true: do not add extra space to canvas for legend!
+		svg <<  svg_obj.print_header
+
+		# actual drawing
+
+		# text
+		svg << svg_obj.print_text( crop_gene_names_for_svg("Merged"), y_pos )
+
+		# background
+		svg << svg_obj.draw_box( 0, x_pos_max, y_pos, svg_obj.colors[:exon], {draw_smaller_box: true})
+
+		# introns
+		@all_intronpos_with_maxlength.keys.sort.each_with_index do |pos, ind|
+			intron_startpos_drawing = calc_pos_drawing( pos, "intron" )
+			class_name = "intron_#{ind}"
+			if @is_default_color_scheme then 
+				intron_length = @all_intronpos_with_maxlength[pos]
+				intron_color = svg_obj.colors[:intron]
+			else
+				intron_length = calc_intron_size_for_nondefault_color_scheme
+				intron_color = determine_intron_color( pos )
+			end
+
+			svg << svg_obj.draw_box(intron_startpos_drawing, intron_length, y_pos, intron_color, {class_name: class_name})
+		end
+
+		svg << svg_obj.print_footer
+
+		return svg.join("\n")
+
 	end
 
 	# common introns (drawn underneath each other) will have the same color
@@ -293,21 +337,15 @@ class GeneAlignment2svg
 		length_drawing = endpos_drawing - startpos_drawing
 		startpos_len_pieces << [startpos_drawing, length_drawing]
 
-
-		# special case: no intron interrupts this exon
-		# simply return exon as it is (but of course fit for drawing)
-		if startpos_len_pieces.empty? then 
-			puts "should not happen any more!"
-			# startpos_drawing = calc_pos_drawing( startpos, "exon" )
-			# endpos_drawing = calc_pos_drawing( endpos, "exon-ende" )
-			# length_drawing = endpos_drawing - startpos_drawing
-			# startpos_len_pieces << [startpos_drawing, length_drawing]
-		end
-
 		return startpos_len_pieces
 	end
 
 	def enlongate_intron_to_avoid_gaps(num)
 		return num + 1
+	end
+
+	# crops gene names to fixed length (which is also used in all other output formats)
+	def crop_gene_names_for_svg(name)
+		return name[0...GeneAlignment.max_length_gene_name]
 	end
 end

@@ -11,7 +11,7 @@ def parse(args)
 
 	opt_parser = OptionParser.new do |opts|
 
-		opts.banner = "\nGenePainter v.1.2 maps gene structures onto multiple sequence alignments"
+		opts.banner = "\nGenePainter v.2.0 maps gene structures onto multiple sequence alignments"
 		opts.separator "Contact: Martin Kollmar (mako[at]nmr.mpibpc.mpg.de)"
 
 		opts.separator ""

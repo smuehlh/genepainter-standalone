@@ -1,7 +1,6 @@
 # !/usr/bin/env ruby
 
 require 'optparse'
-require 'ruby-debug' # TODO
 require 'yaml'
 require 'net/http'
 require File.join(File.expand_path("..",File.dirname(__FILE__)), 'lib', 'helper.rb')
@@ -53,7 +52,7 @@ def select_best_genome(genomes)
 	end
 end
 
-def run_scipio(genome, species, fasta)
+def run_scipio(genome, fasta)
 	url = URI.parse("http://#{Webscipio_server}:#{Webscipio_port}/api_searches")
 	post_parameters = {'scipio_run' => 'true', 'target_file_path' => genome[:path], 'query' => fasta}
 	post_parameters.merge!(Scipio_params)
@@ -84,15 +83,18 @@ def parse(args)
 
 	# default options
 	options = Hash.new
+	specified_yaml_name = nil # a temporary variable
 
 	opt_parser = OptionParser.new do |opts|
 
-		opts.banner = "\nGenePainter v.1.2 maps gene structures onto multiple sequence alignments"
+		opts.banner = "\nGenePainter v.2.0 maps gene structures onto multiple sequence alignments"
 		opts.separator "Contact: Martin Kollmar (mako[at]nmr.mpibpc.mpg.de)"
 
 		opts.separator ""
-		opts.separator "Generate YAML-formatted gene structure for a protein sequence of a given species (with WebScipio)"
-		opts.separator "Usage: download_yaml_for_species.rb -s <species_name> -i <fasta_file> [-o <file_name>]"
+		opts.separator "Generate YAML-formatted gene structure for one or more protein sequences of a given species (with WebScipio)"
+		opts.separator "Usage: generate_yaml_for_species.rb -s <species_name> -i <fasta_file> [-p <path_to_output_files>]"
+		opts.separator ""
+		opts.separator "Gene structures are saved in files named by corresponding fasta headers"
 		opts.separator ""
 
 		opts.separator ""
@@ -109,21 +111,19 @@ def parse(args)
 			options[:available_genomes] = genomes
 		end
 		opts.on("-i", "--input <fasta_file>", String, 
-			"Path to fasta-formatted protein sequence. No multiple sequence alignment should be specified.") do |file|
+			"Path to fasta-formatted protein sequence(s). Might be a multiple sequence alignment of sequences encoded by same species.") do |file|
 
 			Helper.file_exist_or_die(file)
 			headers, seqs = Sequence.read_in_alignment(file)
-			if seqs.size > 1 || seqs.empty? then 
-				Helper.abort "Invalid fasta-formatted protein sequence in file #{options[:fasta]}. Must contain exactly one sequence."
+			if seqs.empty? then 
+				Helper.abort "Invalid file #{file}. Must be fasta-formatted."
 			end
-			options[:fasta] = seqs.first
-			options[:fasta_header] = headers.first
+			options[:fasta] = IO.read(file)
 		end
-		opts.separator "Options:"
-		opts.on("-o", "--outfile <file_name>", String, 
-			"Name of the YAML output file", 
-			"Default: Use fasta-header of the input protein sequence.") do |file|
-			options[:yaml_name] = File.basename(file, ".*")
+		opts.on("-p", "--path <path_to_output_files>", String, 
+			"Path to folder where gene structures should be stored.") do |path|
+			Helper.dir_exist_or_die(path)
+			options[:output_path] = path
 		end
 
 		opts.separator ""
@@ -134,17 +134,20 @@ def parse(args)
 
 	end # optionparser
 
+	if args.empty? then
+		# display help and exit if program is called without any argument
+		puts opt_parser.help
+		exit
+	end
+
 	opt_parser.parse(args)
 
 	# make sure mandatory arguments are present
-	if options[:species].nil? || options[:fasta].nil? then 
+	if options[:species].nil? || options[:fasta].empty?  then 
 		Helper.abort "Missing mandatory argument. Please specify -s <species_name> and -i <fasta_file>." 
 	end
 
-	if options[:yaml_name].nil? then 
-		options[:yaml_name] = options[:fasta_header]
-	end
-	options.delete(:fasta_header) # not needed any more
+	# options.delete(:fasta_header) # not needed any more
 
 	return options
 
@@ -166,19 +169,32 @@ begin
 	puts "Selected genome #{File.basename(best_genome[:path])}."
 
 	## scipio-search in "best" genome for protein
-	print "Starting Scipio run ..."
-	status, scipio_result = run_scipio(best_genome, options[:species], options[:fasta])
+
+	print "Starting Scipio run ... "
+	status, scipio_results = run_scipio(best_genome, options[:fasta])
 	puts " done."
 
-	## output result
-	if ! is_scipio_run_successful(status) then
-		Helper.abort "Nothing found with standard parameters. Visit www.webscipio.org to try different parameters."
+	if is_scipio_run_successful(status) then
+		print "Saving results to file(s) "
+
+		scipio_results.each do |fasta_header, result|
+			f_name = "#{fasta_header}.yaml"
+			if options[:output_path] then 
+				f_name = File.join(options[:output_path], f_name)
+			end
+			fh = File.new(f_name, "w")
+			fh.puts YAML::dump(result)
+			fh.close
+
+			print "#{f_name} "
+		end
+
+		puts "."
+	else
+		Helper.warn "#{fasta_header}: Nothing found with standard parameters. Visit www.webscipio.org to try different parameters."
 	end 
 
-	puts "Saving Scipio result to file #{options[:yaml_name]}.yaml"
-	fh = File.new(options[:yaml_name], "w")
-	fh.puts YAML::dump(scipio_result)
-	fh.close
+
 rescue => e
 	Helper.abort "Something (#{e}) went wrong."
 	exit 1
