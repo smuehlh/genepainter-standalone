@@ -1,6 +1,12 @@
+GenePainter v.2.0 maps gene structures onto multiple sequence alignments
+Contact: Martin Kollmar (mako[at]nmr.mpibpc.mpg.de)
+
+
 INTRODUCTION
 ------------
-The conservation of intron positions comprises information useful for de novo gene prediction as well as for analyzing the origin of introns. Here, we present GenePainter, a standalone tool for mapping gene structures onto protein multiple sequence alignments (MSA). Gene structures, as provided by WebScipio, are aligned with respect to the exact positions of the introns (down to nucleotide level) and intron phase. Output can be viewed in various formats, ranging from plain text to graphical output formats.
+The conservation of intron positions comprises information useful for de novo gene prediction as well as for analyzing the origin of introns. Here, we present GenePainter, a standalone tool for mapping gene structures onto pr
+otein multiple sequence alignments (MSA). Gene structures, as provided by WebScipio, are aligned with respect to the exact positions of the introns (down to nucleotide level) and intron phase. Output can be viewed in various 
+formats, ranging from plain text to graphical output formats.
 
 
 INSTALLATION
@@ -20,7 +26,7 @@ No compilation required.
 
 Ruby version
 ------------
-Ruby version 1.9.2 or higher is required. If necessary, consider using Ruby Version Manager (RVM; https://rvm.io/) to install and work with multiple ruby environments on your machine. 
+Ruby version 2.0.0 or higher is required. If necessary, consider using Ruby Version Manager (RVM; https://rvm.io/) to install and work with multiple ruby environments on your machine. 
 
 
 RUNNING GENEPAINTER
@@ -35,94 +41,108 @@ $ ruby gene_painter.rb
 
 2) as a program
 $ ./gene_painter.rb
-GenePainter assumes your ruby interpreter to be located at /usr/local/bin/ruby
-To meet your local requirements, please edit the Shebang (first line of gene_painter.rb) and change the specified path to the correct one.
-
-Example: 
-Ruby interpreter located at /usr/bin/ruby
-Shebang: #!/usr/bin/ruby
-
 
 Usage
 -----
-$ ruby gene_painter.rb -i <alignment> -p <yaml-files> [<options>]
+Usage: gene_painter.rb -i path_to_alignment -p path_to_genestructure_folder [options]
+Standard output format: Mark exons by '-' and introns by '|'
+
+    -i, --input <path_to_alignment>  Path to fasta-formatted multiple sequence alignment
+    -p <path_to_genestructures>,     Path to folder containing gene structures in YAML or GFF format
+        --path
 
 Options
 -------
+Text-based output format:
+        --intron-phase               Mark introns by their phase instead of '|'
+        --phylo                      Mark exons by '0' and introns by '1'
+        --spaces                     Mark exons by space (' ') instead of '-'
+        --no-standard-output         Specify to skip standard output format.
+        --alignment                  Output the alignment file with additional lines containing intron phases
+        --fuzzy N                    Introns at most N base pairs apart from each other are aligned
 
-***gene_painter.rb: align genes and put the structure figures into a file***
-***Version: 1.0.0***
-usage: ruby gene_painter.rb -i <alignment> -p <yaml-files> [<options>]
-Alignment:
-                              Path to alignment file. Fasta format needed.
-YAML-Files:
-                              Path to folder containing YAML files.
-Options:
--o <project_name>             Base name of the output file(s) (default: 'genepainter')
--a                            Output the alignment file with additional lines containing intron phases
--n                            Mark introns by intron phase instead of the vertical bar "|"
--phylo                        For phylogenetic analysis: Mark exons and introns by "0" and "1", respectively. Save as FASTA
--s                            Mark non introns by " " instead of "-"
--svg width height [Specifics] Create an SVG-file of size <width> x <height>
-     Specifics:               Use the additional parameter "extended", "normal" (default), or "reduced" to create the svg
-                 extended     Use this parameter to create a more detailed svg
-                 normal       Use this parameter to create the normal svg
-                 reduced      Use this parameter to create a svg focused on common introns
--start X                      Alignment position to start (default: position 1)
--stop Y                       Alignment position to stop (default: last position)
--pdb file.pdb [chain]         Two scripts for execution in PyMol will be provided. In color_exons.py the
-                              consensus exons are colored and in color_splicesites.py the splice junctions
-                              of the consensus exons are marked for <chain> (default: chain A)
--pdb_prot prot_name           Use protein <prot_name> as reference for alignment with the pdb sequence
-                              Default: First protein in <alignment>
--f                            Force alignment between pdb and first protein sequence of the MSA or protein <prot_name> (if specified)
-                              This ignores the default that intron positions will only be mapped if the alignment score > 70%
--consensus value              Color only intron positions conserved in <value> percent of all genes (default: 80%)
--ref_prot_struct              Color only the intron positions occurring in the gene of the reference protein.
-                              May be combined with "-consensus"
--penalize_endgaps             Penalize gaps at the end of the alignment (behaves like the standard Needleman-Wunsch algorithm)
-                              Default: gaps at the end of the alignment are not penalized
+Graphical output format:
+        --svg                        Drawn a graphical representation of genes in SVG format
+                                     Per default, detailed representation will be produced
+                                     Use parameter '--svg-format' to get less details
+        --svg-format FORMAT          FORMAT: ["normal", "reduced", "both"]
+                                     'normal' draws details of aligned exons and introns [default]
+                                     'reduced' focuses on common introns only
+                                     'both' draws both formats
 
+        --pdb FILE                   Mark consensus or merged gene structure in pdb FILE
+                                     Consenus gene structure contains introns conserved in N % of all genes
+                                     Specify N with option --consensus N; [default: 80%]
+                                     Two scripts for execution in PyMol are provided:
+                                     'color_exons.py' to mark consensus exons
+                                     'color_splicesites.py' to mark splice junctions of consensus exons
+        --pdb-chain CHAIN            Mark gene structures for chain CHAIN
+                                     [Default: Use chain A]
+        --pdb-ref-prot PROT          Use protein PROT as reference for alignment with pdb sequence
+                                     [Default: First protein in alignment]
+        --pdb-ref-prot-struct        Color only intron positions occuring in the reference protein structure.
 
-Examples
---------
-$ ruby gene_painter.rb -i test_data/coronin_alignment.fas -o coronin -p test_data/coronin_genes/ -svg 1000 500 extended \
--pdb test_data/2AQ5.pdb -pdb_prot HsCoro1A
-$ ruby gene_painter.rb -i test_data/coronin_alignment.fas -o coronin -p test_data/coronin_genes/ -svg 1000 500 reduced
+        --tree                       Generate newick tree file and SVG representation
 
+Meta information and statistics:
+        --consensus N                Introns conserved in N % genes.
+                                     Specify N as decimal number between 0 and 1
+        --merge                      Merge all introns into a single exon intron pattern
+        --statistics                 Output additional file with statistics about common introns
+                                     To include information about taxomony, specify '--taxomony' and '--taxonomy-to-fasta' options
 
-Input
------
-Gene structures: in yaml-format as obtained by WebScipio. Please visit http://www.webscipio.org/help/scipio#description for further information about this format.
-Alignment: fasta formatted multiple sequence alignment. The fasta header must not contain any blanks or special characters, as they must be exactly identical to the filenames of corresponding YAML files.
+Taxonomy:
+        --taxonomy FILE              NCBI taxonomy database dump file FILE
+                                     OR path to extract from NCBI taxonomy:
+                                     Lineage must be semicolon-separated list of taxa from root to species.
+        --taxonomy-to-fasta FILE     Text-based file mapping gene structure file names to species names
+                                     Mandatory format:
+                                     One or more genes given as semicolon-separated list and species name
+                                     Delimiter between gene list and species name must be a colon
+                                     The species name itself must be enclosed by double quotes like this "SPECIES"
+        --taxonomy-common-to x,y,z   Mark introns common to taxa x,y,z
+                                     List must consist of at least one NCBI taxon
+        --[no-]exclusively-in-taxa   Mark introns occuring (not) exclusively in listed taxa
+                                     Default: Not exclusively.
+        --introns-per-taxon          Newly gained introns for every inner node in taxonomy
+        --no-grep                    Read the NCBI taxomony dump into RAM
+                                     This will require some hundert MBs of RAM additionally
+                                     Default: taxomony dump is parsed with 'grep' calls
+        --nice                       Give grep calls to parse taxonomy dump a lower priority
+                                     Please make sure to have 'nice' in your executable path when using this option
 
+Analysis and output of all or subset of data:
+        --analyse-all-output-all     Analyse all data and provide full output [default]
+        --analyse-all-output-selection
+                                     Analyse all data and provide text-based and graphical output for selection only
+                                     All introns are analysed, including those not present in selection
+        --analyse-selection-output-selection
+                                     Analyse selected data and provide output for selection only
+        --analyse-selection-on-all-data-output-selection
+                                     Analyse intron positions of selected data in all data and provide output for selection only
+                                     Introns present in selection are analysed in all data
+Selection criteria for data and output selection
+        --selection-based-on-regex <"regex">
+                                     Regular expression applied on gene structure file names
+        --selection-based-on-list x,y,z
+                                     List of gene structures to be used
+        --selection-based-on-species <"species">
+                                     Use all gene structures associated with species
+                                     Specify also --taxonomy-to-fasta to map gene structure file names to species names
+        --select-all                 No selection applied (default)
 
-AUTHORS
--------
-Björn Hammesfahr, Florian Odronitz, Stefanie Mühlhausen, Stephan Waack, Martin Kollmar
+General options:
+    -o, --outfile <file_name>        Prefix of the output file(s)
+                                     Default: genepainter
+        --path-to-output <path>      Path to location for the output file(s)
+                                     Default: same location as GenePainter source files
+        --range START,STOP           Restrict genes to range START-STOP in alignment
+        --[no-]delete-range          (Not) Delete specified range
+        --keep-common-gaps           Keep common gaps in alignment
+        --no-best-position-introns   Plot introns always onto beginning of a gap
+                                     Default: Align introns if their position differs by alignment gaps only
+        --[no-]separate-introns-in-textbased-output
+                                     (Not) Separate each consecutive pair of introns by an exon placeholder in text-based output formats.
+                                     Default: Separate introns unless the output lines get too long.
 
-
-HOW TO CITE
------------
-Björn Hammesfahr †, Florian Odronitz †, Stefanie Mühlhausen, Stephan Waack & Martin Kollmar (2013) 
-GenePainter: a fast tool for aligning gene structures of eukaryotic protein families, visualizing the alignments and mapping gene structures onto protein structures. BMC Bioinformatics 14, 77.
-
-
-CONTACT
--------
-Dr. Martin Kollmar
-Department of NMR-based Structural Biology
-Group Systems Biology of Motor Proteins
-Am Faßberg 11
-37-77 Göttingen
-
-
-HOMEPAGE
---------
-http://www.motorprotein.de/genepainter.html
-
-
-LICENCE
--------
-GenePainter can be downloaded and used under a GNU General Public License.
-Any restrictions to use by non-academics: Using GenePainter by non-academics requires permission.
+    -h, --help                       Show this message

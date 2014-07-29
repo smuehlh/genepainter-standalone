@@ -18,11 +18,13 @@ class TaxonomyToGene
 
 		@species_with_corresponding_genes = self.class.map_genenames_to_speciesnames( path_to_linked_list_genenames_speciesnames, genes_with_data )
 		@known_genes = @species_with_corresponding_genes.values.flatten.uniq
-		if @known_genes.empty? then 
+		
+		species_with_corresponding_lineages = extract_taxonomy_for_species(path_to_taxonomy, is_no_grep)
+		if @known_genes.empty? || species_with_corresponding_lineages.empty? then 
 			Helper.abort "Mapping of genes to corresponding taxonomic lineage failed. No gene could be mapped."
 		end
 
-		@taxa_with_tax_obj = extract_taxonomy_for_species(path_to_taxonomy, is_no_grep) # Hash: key= taxon, value: taxonomie-object
+		@taxa_with_tax_obj = convert_lineages_to_taxonomy_objs(species_with_corresponding_lineages) # Hash: key= taxon, value: taxonomie-object
 	end
 
 	# include taxonomic info in gene obj: full lineage of corresponding species and index of the first uniq ancestor of that species
@@ -98,7 +100,7 @@ class TaxonomyToGene
 				/x) # x: allows to comment on individual parts of regex
 
 			if match_data.nil? || match_data.size != 3 then 
-				error_while_parsing_file(file, line, 
+				error_while_parsing_file(path, line, 
 					"Expected colon-separated list of gene(s) and species. Species must be enclosed in double quotes (\")"
 				)
 			end
@@ -125,12 +127,11 @@ class TaxonomyToGene
 	def extract_taxonomy_for_species(path_to_tax, is_no_grep)
 		if check_if_taxonomy_is_taxdump_or_list_of_lineages(path_to_tax) then 
 			# tax file is NCBI taxonomy dump
-			lineage_by_species = extract_taxonomy_of_species_in_alignment_from_taxdump( path_to_tax, is_no_grep ) 
+			return extract_taxonomy_of_species_in_alignment_from_taxdump( path_to_tax, is_no_grep ) 
 		else
 			# tax file is no taxonomy dump, but contains only lineage
-			lineage_by_species = extract_taxonomy_of_species_in_alignment_from_taxonomylist(path_to_tax)
+			return extract_taxonomy_of_species_in_alignment_from_taxonomylist(path_to_tax)
 		end
-		return convert_lineages_to_taxonomy_objs(lineage_by_species)
 	end
 	def check_if_taxonomy_is_taxdump_or_list_of_lineages(path)
 		dir_taxdump = File.dirname(path)
@@ -243,7 +244,7 @@ class TaxonomyToGene
 			lineage = line.split(";").map { |g| g.strip.capitalize } # remove leading and trailing white spaces, capitalize all taxa
 			if lineage.size < 2 then 
 				# lineage must consist at least of root and species
-				error_while_parsing_file(file, line, "Expected semicolon-separated list of taxa from root to species.")
+				error_while_parsing_file(path, line, "Expected semicolon-separated list of taxa from root to species.")
 			end
 			species = lineage[-1] # last taxon listed must be species
 			if @species_with_corresponding_genes[species] then 

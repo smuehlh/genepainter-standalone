@@ -673,6 +673,9 @@ class GeneAlignment
 			end
 		end
 
+		# stop execution here if there is no taxonomic information !!!
+		throw :no_taxonomy if all_lineages.empty? || taxa_intron_first_found.empty? || common_ancestors.nil? 
+
 		last_common_ancestor = find_last_common_ancestor(all_lineages, common_ancestors, taxa_intron_first_found)
 
 		tree_obj = Tree.new(all_lineages, last_common_ancestor, taxa_intron_first_found)
@@ -715,14 +718,15 @@ class GeneAlignment
 	# --- begin helper methods for export_as_tree
 	def find_last_common_ancestor(all_lineages, common_ancestors, taxa_intron_first_found)
 		# # 1) simple case: use the last of all common ancestors
-		# # 2) more difficult case: all needed taxa belong to one lineage -> use the first needed taxon as root
+		# # 2) more difficult case: all needed taxa belong to one lineage and there is only this one lineage -> use the first needed taxon as root
 
-		# all_lineages.each do |lineage|
-		# 	if taxa_intron_first_found.is_subset?(lineage) then 
-		# 		return lineage.intersection(taxa_intron_first_found).first # the first (nearest to root) taxon really needed
-		# 	end
-		# end
-		return common_ancestors.last # the last (farest to root) taxon common to all
+		if all_lineages.size == 1 && taxa_intron_first_found.is_subset?(all_lineages[0]) then 
+			# case 2)
+			return all_lineages[0].intersection(taxa_intron_first_found).first # the first (nearest to root) taxon really needed
+		else
+			# case 1)
+			return common_ancestors.last # the last (farest to root) taxon common to all
+		end		
 	end
 
 	def map_genes_onto_leaves(all_leaves)
@@ -773,6 +777,15 @@ class GeneAlignment
 		Helper.sanitize_taxon_name(key) + "_" + prettify_gain_loss_without_taxonname(statistics, key)
 	end
 	def prettify_gain_loss_without_taxonname(statistics, key)
+		# output = []
+		# data = statistics[key]
+		# if data[:gain] > 0 then 
+		# 	output.push( data[:gain].to_s + "green" )
+		# end
+		# if data[:loss] > 0 then 
+		# 	output.push( data[:loss].to_s + "red" )
+		# end
+		# return output.join("_")
 		data = statistics[key]
 		data[:gain].to_s + "green_" + data[:loss].to_s + "red"
 	end
@@ -796,6 +809,9 @@ class GeneAlignment
 			end
 		end
 
+		# stop execution here if there is no taxonomic information!!!
+		throw :no_taxonomy if taxon_first_found_with_pattern.empty?
+
 		output = Array.new(taxon_first_found_with_pattern.size)
 		taxon_first_found_with_pattern.keys.sort.each_with_index do |taxon, ind|
 			name = convert_string_to_chopped_fasta_header( taxon )
@@ -812,6 +828,31 @@ class GeneAlignment
 		)
 
 		return reduced_output.join("\n")
+	end
+
+	# this method is for genepainter webserver only
+	# it generates a list of intron numbers that occur first in each taxon
+	def export_as_taxonomy_list_of_intron_positions_per_taxon_only
+		taxon_first_found_with_intron_numbers = {}
+		
+		sorted_intron_positions = @stats_per_intron_pos.keys.sort
+		sorted_intron_positions.each_with_index do |intronpos, intron_number|
+			introninfo = @stats_per_intron_pos[intronpos]
+			if taxon = introninfo[:taxon_first_found] then 
+				if ! taxon_first_found_with_intron_numbers[taxon] then 
+					taxon_first_found_with_intron_numbers[taxon] = []
+				end
+				taxon_first_found_with_intron_numbers[taxon].push intron_number
+			end
+		end
+		throw :no_taxonomy if taxon_first_found_with_intron_numbers.empty?
+		
+		output = Array.new(taxon_first_found_with_intron_numbers.size) 
+		taxon_first_found_with_intron_numbers.keys.each_with_index do |taxon, ind|
+			intron_numbers = taxon_first_found_with_intron_numbers[taxon]
+			output[ind] = "#{taxon}:#{intron_numbers.join(",")}"
+		end
+		return output.join("\n")
 	end
 
 	# information about every intron position
@@ -866,13 +907,7 @@ class GeneAlignment
 
 			if ind_taxon_first_found && gene.taxonomic_lineage[ind_taxon_first_found+1] then 
 				descendant = gene.taxonomic_lineage[ind_taxon_first_found+1] # lineage starts with root
-begin
 				descendant = descendant.capitalize
-rescue => err
-	debugger
-	puts "ind taxon first found ist last taxon of lineage"
-end
-
 			else
 				descendant = "n.d."
 			end

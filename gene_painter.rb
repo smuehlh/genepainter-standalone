@@ -125,6 +125,7 @@ end
 
 # make sure all _needed_ aligned sequences are of same length
 common_aligned_seqs = Sequence.ensure_seqs_have_same_length(aligned_seqs, aligned_seqs_names, common_names)
+
 # remove common gaps if neccessary
 if options[:ignore_common_gaps] then 
 	common_aligned_seqs = Sequence.remove_common_gaps(common_aligned_seqs, 
@@ -348,23 +349,46 @@ if options[:output_format_list].include?("stats") then
 end
 
 if options[:output_format_list].include?("extensive_tax") then 
-	output = gene_alignment_obj.export_as_taxonomy
 	f_out = options[:path_to_output] + "-taxonomy.txt"
-	write_verbosely_output_to_file(f_out, output)
+	is_success = catch(:no_taxonomy) do
+		output = gene_alignment_obj.export_as_taxonomy
+		write_verbosely_output_to_file(f_out, output)
+		true
+	end
+	if ! is_success then 
+		puts "\t taxonomy is missing: cannot write to #{f_out}"
+	end
+end
+
+if options[:tax_options][:generate_list_intron_positios_per_taxon] then 
+	f_out = options[:path_to_output] + "-taxonomy-intron-numbers.txt"
+	is_success = catch(:no_taxonomy) do 
+		output = gene_alignment_obj.export_as_taxonomy_list_of_intron_positions_per_taxon_only
+		write_verbosely_output_to_file(f_out, output)
+		true
+	end
+	if ! is_success then 
+		puts "\t taxonomy is missing: cannot write to #{f_out}"
+	end
 end
 
 if options[:output_format_list].include?("tree") then 
-	output = gene_alignment_obj.export_as_tree
-
 	f_out_phb = options[:path_to_output] + "-tree.phb"
-	write_verbosely_output_to_file(f_out_phb, output)
-	f_out_svg = options[:path_to_output] + "-tree.svg"
-	path_to_python_script = File.join(File.dirname(__FILE__), 'tools', 'phb2svg.py')
-	is_success = system 'python', *[path_to_python_script, '--spacing=5', '--minstep=80', '--textwidth=150', f_out_phb, f_out_svg]
+	is_success = catch(:no_taxonomy) do 
+		output = gene_alignment_obj.export_as_tree
+		write_verbosely_output_to_file(f_out_phb, output)
+		f_out_svg = options[:path_to_output] + "-tree.svg"
+		path_to_python_script = File.join(File.dirname(__FILE__), 'tools', 'phb2svg.py')
+		is_success_python = system 'python', *[path_to_python_script, '--spacing=5', '--minstep=80', '--textwidth=150', f_out_phb, f_out_svg]
+		if ! is_success_python then 
+			Helper.log "Could not convert #{f_out_phb} to SVG."
+		else
+			puts "\t writing output to #{f_out_svg} ... "
+		end
+		true
+	end
 	if ! is_success then 
-		Helper.log "Could not convert #{f_out_phb} to SVG."
-	else
-		puts "\t writing output to #{f_out_svg} ... "
+		puts "\t taxonomy is missing: cannot write to #{f_out_phb}"
 	end
 end
 

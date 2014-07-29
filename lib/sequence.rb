@@ -2,16 +2,20 @@ module Sequence
 	extend self
 
 	# optional parameter: is_return_pos_before_gap: return position of last aa before gap, instead of last gap pos if applicable
-	def sequence_pos2alignment_pos(spos, aseq, is_return_pos_before_gap=true)
-		pats = []
-		aseq.gsub("-", "")[0..spos].split("").each {|chr| pats << ("-*" + chr)}
-		if ! is_return_pos_before_gap then 
-			# add pattern for trailing gap
-			pats.push("-*")
-		end
-		pat = Regexp.new(pats.join)
-		pat.match(aseq)[0].length - 1
-	end
+    def sequence_pos2alignment_pos(spos, aseq, is_return_pos_before_gap=true)
+        pats = []
+
+		tmp_aseq = aseq.gsub("-", "")
+		tmp_aseq = tmp_aseq.gsub("*", "@")
+		tmp_aseq[0..spos].split("").each {|chr| pats << ("-*" + chr)}
+       	if ! is_return_pos_before_gap then 
+                # add pattern for trailing gap
+                pats.push("-*")
+        end
+
+        pat = Regexp.new(pats.join)
+        pat.match(aseq)[0].length - 1
+    end
 
 	def alignment_pos2sequence_pos(apos, aseq)
 		mapped_pos = aseq[0..apos].gsub("-", "").length - 1
@@ -95,11 +99,13 @@ module Sequence
 		end
 
 		# make sure every seq, which is finally used, is of same length
-		used_seqs.map do |seq|
+		used_seqs.map! do |seq|
 			this_length = seq.size
 			if this_length < max_length then
 				# extend seq with gaps
-				seq = seq.ljust(max_length, "-")
+				seq.ljust(max_length, "-")
+			else
+				seq
 			end
 		end
 

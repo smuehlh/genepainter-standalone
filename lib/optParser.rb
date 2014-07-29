@@ -48,7 +48,7 @@ class OptParser
 		options[:select_by] = { regex: nil, list: nil, species: nil, no_selection: nil } # selection criteria: species, list, or regular expression
 
 		# hidden parameters
-		@hidden_params = ["--svg-merged", "--svg-nested"]
+		@hidden_params = ["--svg-merged", "--svg-nested", "--intron-numbers-per-taxon"]
 
 
 		opt_parser = OptionParser.new do |opts|
@@ -237,6 +237,9 @@ class OptParser
 				"Newly gained introns for every inner node in taxonomy") do |opt|
 				options[:output_format_list] << "extensive_tax"
 			end
+			opts.on("--intron-numbers-per-taxon") do |opt|
+				vivify_hash(options, :tax_options, :generate_list_intron_positios_per_taxon, true)
+			end
 			opts.on("--no-grep", 
 				"Read the NCBI taxomony dump into RAM",
 				"This will require some hundert MBs of RAM additionally",
@@ -406,7 +409,7 @@ class OptParser
 			end
 		end
 		# if taxonomy should be considered, need taxonomy dump file, mapping fasta to tax file and list of taxa
-		if options[:tax_options][:selected_taxa] || 
+		if options[:tax_options].any? ||
 			options[:output_format_list].include?("extensive_tax") || 
 			options[:output_format_list].include?("tree") then 
 			if ! (

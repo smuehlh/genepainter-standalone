@@ -251,7 +251,10 @@ def tree_layout(tree):
         if not n.weight:
             n.weight = minweight
     
+    # print tree.export()
+
     def go_down(node, xpos):
+        # print xpos
         if node.isleaf():
             ''' a---b text'''
             nodes.append((xpos, lc[0], node.weight, node.label, True))
@@ -301,7 +304,7 @@ def render_svg(tree, fontsize=12, spacing=2, textwidth=100,
            '<g  transform="translate(.5,.5)">' % (image_width, image_height)]
 
     def node(name, *a, **kwa):
-        attr = ' '.join('%s="%s"' % (k.replace('_','-'),int(v) if isinstance(v, (int, float)) else v) for (k,v) in kwa.iteritems())
+        attr = ' '.join('%s="%s"' % (k.strip('_').replace('_','-'),int(v) if isinstance(v, (int, float)) else v) for (k,v) in kwa.iteritems())
         if a:
             svg.append('<%s %s>' % (name, attr))
             svg.extend(a)
@@ -326,14 +329,14 @@ def render_svg(tree, fontsize=12, spacing=2, textwidth=100,
             text, v1, c1, v2, c2 = m.groups()
             c1 = c1 or 'black'
             c2 = c2 or 'black'
-            node('text', v1, x=(x+w)*sx-2, y=y*sy+smallfont-2, text_anchor="end", style=branchlabel, fill=c1)
-            node('text', v2, x=(x+w)*sx-2-len(v1)*smallfont, y=y*sy+smallfont-2, text_anchor="end", style=branchlabel, fill=c2)
+            node('text', v2, x=(x+w)*sx-3, y=y*sy+smallfont-1, text_anchor="end", style=branchlabel, fill=c2)
+            node('text', v1, x=(x+w)*sx-3-len(v2)*smallfont, y=y*sy+smallfont-1, text_anchor="end", style=branchlabel, fill=c1)
             
         if isleaf:
-            node('text', text, x=(x+w)*sx + 2, y=y*sy+fontsize/3, style=leaflabel)
+            node('text', text.replace('.', ' '), x=(x+w)*sx + 4, y=y*sy+fontsize/3, style=leaflabel, _class="taxon")
         elif text:
-            node('text', text, x=(x+w)*sx-2, y=y*sy-2,
-                     text_anchor="end", style=branchlabel)
+            node('text', text, x=(x+w)*sx-3, y=y*sy-3,
+                     text_anchor="end", style=branchlabel, _class="taxon")
 
     svg.append('</g></svg>')
     return '\n'.join(svg)

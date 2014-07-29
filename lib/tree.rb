@@ -45,13 +45,15 @@ class Tree
 
 		mandatory_taxa.each do |current_node|
 
-			# @taxa_with_tax_objs[current_node] = create_dummy_taxonomy_obj(current_node)
-
+			if @taxa_with_tax_objs[current_node] then 
+				# current node is already part of the tree
+				next
+			end
 			lineage_root_to_current_node = extract_lineage_root_to_node(current_node, all_lineages)
 
 			parent_node = find_parent_in_tree(current_node, lineage_root_to_current_node)
 
-			if current_node != @root then 
+			if is_no_cycle_between_parent_and_node(parent_node, current_node) then 
 				@taxa_with_tax_objs[current_node] = create_dummy_taxonomy_obj(current_node)
 				link_node_to_parent(current_node, parent_node)
 			end
@@ -69,9 +71,10 @@ class Tree
 			if ! @taxa_with_tax_objs[parent_node].is_leaf? then 
 				current_node = first_uniq_ancestors_by_species[current_species]
 
-				@taxa_with_tax_objs[current_node] = create_dummy_taxonomy_obj(current_node)
-
-				link_node_to_parent(current_node, parent_node)
+				if is_no_cycle_between_parent_and_node(parent_node, current_node) then 
+					@taxa_with_tax_objs[current_node] = create_dummy_taxonomy_obj(current_node)
+					link_node_to_parent(current_node, parent_node)
+				end
 				verify_links_siblings_to_parent(parent_node, current_node, lineage_root_to_species, all_lineages)
 
 			end # if parent_node is no leaf
@@ -83,16 +86,25 @@ class Tree
 		all_lineages.each do |lineage_root_to_species|
 			current_species = lineage_root_to_species.last
 
-			parent_node = find_parent_in_tree(current_species, lineage_root_to_species)
+			# is species itself part of the tree? (and hopefully a leaf)?
+			if @taxa_with_tax_objs[current_species] && @taxa_with_tax_objs[current_species].is_leaf? then 
+				# nothing to do, species is already part of the tree
+				next
 
-			if ! @taxa_with_tax_objs[parent_node].is_leaf? then 
+			else
+				# species not part of the tree, need the parent
+				parent_node = find_parent_in_tree(current_species, lineage_root_to_species)
 
-				new_leaf = find_descendant_of_node_in_lineage(parent_node, lineage_root_to_species, all_lineages)
+				if ! @taxa_with_tax_objs[parent_node].is_leaf? then 
 
-				@taxa_with_tax_objs[new_leaf] = create_dummy_taxonomy_obj(new_leaf)
+					new_leaf = find_descendant_of_node_in_lineage(parent_node, lineage_root_to_species, all_lineages)
 
-				link_node_to_parent(new_leaf, parent_node)
-				verify_links_siblings_to_parent(parent_node, new_leaf, lineage_root_to_species, all_lineages)
+					if is_no_cycle_between_parent_and_node(parent_node, new_leaf) then 
+						@taxa_with_tax_objs[new_leaf] = create_dummy_taxonomy_obj(new_leaf)
+						link_node_to_parent(new_leaf, parent_node)
+					end
+					verify_links_siblings_to_parent(parent_node, new_leaf, lineage_root_to_species, all_lineages)
+				end
 			end
 		end
 	end
@@ -217,13 +229,22 @@ class Tree
 
 	def find_parent_in_tree(node, lineage_root_to_node)
 		current_node = @root
+		last_node = lineage_root_to_node[-1]
 		my_place_not_found = true
 		my_place = nil
 		while my_place_not_found do 
 			new_current_node = false
 			@taxa_with_tax_objs[current_node].descendants.each do |current_child|
+				if current_child == last_node then 
+					# last node is part of the tree, and we just found its parent!
+					break
+				end
 				if lineage_root_to_node.include?(current_child) then 
 					new_current_node = true
+					if current_node == current_child then 
+						# attention! we are running into a never-ending loop
+						Helper.abort "Cannot create phylogenetic lineage."
+					end
 					current_node = current_child
 					break
 				end
@@ -303,6 +324,10 @@ class Tree
 	def update_root(new_root)
 		@root = new_root
 		remove_ancestor_from_node(@root)
+	end
+
+	def is_no_cycle_between_parent_and_node(parent, node)
+		! (parent == node)
 	end
 
 	def ensure_node_is_valid(node, all_lineages)
