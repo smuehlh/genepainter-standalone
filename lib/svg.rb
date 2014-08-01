@@ -183,7 +183,7 @@ class Svg
 	# a legends needs 4 additional lines
 	def print_legend(y_pos, length_one_nt_exon, length_one_nt_intron)
 
-		box_size = 3 # 3 viewbox units look ok
+		box_size = 10 # 10 viewbox units look ok
 		distance_text_to_box = box_size + 0.5 # text should start after the end of the box; add 0.5 to get some additional space
 		distances_between_text_columns = Svg.parameters[:distance_genename_to_gene] / 2
 		x_pos_2nd_col = Svg.parameters[:distance_genename_to_gene]

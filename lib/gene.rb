@@ -288,29 +288,15 @@ class Gene
 
 	def get_all_exons_with_length
 		# collect start and lenght of each exon
-		if is_convert_to_nt_length then 
-			all_pos_with_length = @exons.collect do |exon|
-				[exon.start_pos_in_dna_seq, exon.length_in_nt]
-			end
-		else
-			all_pos_with_length = @exons.collect do |exon|
-				[exon.start_pos_in_aligned_protein, exon.length_in_alignment]
-			end 
-		end
-		return all_pos_with_length
+		@exons.collect do |exon|
+			[exon.start_pos_in_aligned_protein, exon.length_in_alignment]
+		end 
 	end
 
 	def get_all_introns_with_length(is_convert_to_nt_length=false)
-		if is_convert_to_nt_length then
-			all_pos_with_length = @introns.collect do |intron|
-				[intron.pos_last_nt_in_dna_seq_before_intron, intron.n_nucleotides]
-			end
-		else
-			all_pos_with_length = @introns.collect do |intron|
-				[intron.pos_last_aa_in_aligned_protein_before_intron, intron.n_nucleotides]
-			end
+		@introns.collect do |intron|
+			[intron.pos_last_aa_in_aligned_protein_before_intron, intron.n_nucleotides]
 		end
-		return all_pos_with_length
 	end
 
 	def get_all_introns_with_phase

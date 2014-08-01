@@ -81,7 +81,7 @@ class GeneAlignment2svg
 		svg <<  svg_obj.print_header
 
 		@aligned_genes.each_with_index do |gene, y_pos_nested_element|
-
+			
 			# index equals the y_position in the final drawing, it is used only in nested svg
 			# all other elements are positions relative to position of nested svg
 
@@ -193,6 +193,7 @@ class GeneAlignment2svg
 		return svg.join("\n")
 	end
 
+	# WARNING: all changes here might affect the webserver !!!
 	def create_svg_merged_genestructure
 		svg = []
 
@@ -210,7 +211,7 @@ class GeneAlignment2svg
 		svg << svg_obj.print_text( crop_gene_names_for_svg("Merged"), y_pos )
 
 		# background
-		svg << svg_obj.draw_box( 0, x_pos_max, y_pos, svg_obj.colors[:exon], {draw_smaller_box: true})
+		svg << svg_obj.draw_box( 0, x_pos_max, y_pos, svg_obj.colors[:exon], {draw_smaller_box: true, class_name: "background"})
 
 		# introns
 		@all_intronpos_with_maxlength.keys.sort.each_with_index do |pos, ind|

@@ -324,7 +324,7 @@ def render_svg(tree, fontsize=12, spacing=2, textwidth=100,
         node('line', x1=x*sx, y1=y*sy, x2=(x+w)*sx, y2=y*sy, style=linestyle)
         node('circle', cx=(x+w)*sx, cy=y*sy, r=2, fill="black")
         if not text: continue
-        m = re.match('(.*)_([0-9]+)([^_]+)?_([0-9]+)([^_]+)?$', text)
+        m = re.match('(.*)_([0-9\-]+)([^_]+)?_([0-9\-]+)([^_]+)?$', text)
         if m:
             text, v1, c1, v2, c2 = m.groups()
             c1 = c1 or 'black'

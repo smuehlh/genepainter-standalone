@@ -237,6 +237,8 @@ class GeneAlignment
 			@stats_per_intron_pos.delete_if do |intron_pos, intron_info|
 				intron_info[:genes].is_disjoint_set?(selected_for_output)
 			end
+
+			@is_reduced_intronpositions = true
 		end
 
 		# overwrite old class variables
@@ -692,23 +694,41 @@ class GeneAlignment
 				nodes_without_intron = tree_obj.find_nodes_without_intronposition(taxon, leaves_with_intron)
 
 				update_gain(taxa_with_gain_loss, taxon)
-				update_loss(taxa_with_gain_loss, nodes_without_intron)
+				update_losses(taxa_with_gain_loss, nodes_without_intron)
 			end
 		end
 
 		# use collected data as alternative names
 		# format:
 		# name[_gain/loss]?[_stats]?
+		# special features:
+		# - nodes without any gain or loss get 0/0 counts
+		# - nodes with 0 gains due to the removal of intron positions: 0 gain is replaced by "-"
 		tree_obj.get_all_nodes.each do |node|
 			if tree_obj.is_leaf?(node) && all_taxa_with_statistics[node] then 
 				taxa_with_alternative_names[node] = prettify_statisics( all_taxa_with_statistics, node)
 			end
+
 			if taxa_with_gain_loss[node] then 
-				if taxa_with_alternative_names[node] then 
-					taxa_with_alternative_names[node] += "_" + prettify_gain_loss_without_taxonname( taxa_with_gain_loss, node )
+				# introns gained/lost at this node
+				data = taxa_with_gain_loss[node]
+				if @is_reduced_intronpositions then 
+					# intron positions were removed, so 0 gains is incorrect: they were just not determinded. do not display them
+					is_display_zero_gain = false 
 				else
-					taxa_with_alternative_names[node] = prettify_gain_loss( taxa_with_gain_loss, node )
+					is_display_zero_gain = true # display 0 gains as this is the correct information here
 				end
+			else
+				# nothing happend, name it like this!
+				data = init_gain_loss
+				is_display_zero_gain = true # display 0 gains as this is the correct information here
+			end
+
+			# update alternative-names list
+			if taxa_with_alternative_names[node] then 
+				taxa_with_alternative_names[node] += "_" + prettify_gain_loss_without_taxonname( data, is_display_zero_gain )
+			else
+				taxa_with_alternative_names[node] = prettify_gain_loss( data, node, is_display_zero_gain )
 			end
 		end
 
@@ -757,37 +777,33 @@ class GeneAlignment
 		data = statistics[key]
 		Helper.sanitize_taxon_name(key) + ".#" + data[:species].size.to_s + ".#" + data[:genes].size.to_s + ".#" + data[:intronpos].size.to_s
 	end
-
+	def init_gain_loss
+		{gain: 0, loss: 0}
+	end
 	def update_gain(statistics, key)
 		if ! statistics[key] then 
-			statistics[key] = {gain: 0, loss: 0}
+			statistics[key] = init_gain_loss
 		end
 		statistics[key][:gain] += 1
 	end
-	def update_loss(statistics, keys)
+	def update_losses(statistics, keys)
 		keys.each do |key|
 			if ! statistics[key] then 
-				statistics[key] = {gain: 0, loss: 0}
+				statistics[key] = init_gain_loss
 			end
 			statistics[key][:loss] += 1
 		end
 	end
-	def prettify_gain_loss(statistics, key)
-		data = statistics[key]
-		Helper.sanitize_taxon_name(key) + "_" + prettify_gain_loss_without_taxonname(statistics, key)
+	def prettify_gain_loss(data, key, is_display_zero_gain)
+		Helper.sanitize_taxon_name(key) + "_" + prettify_gain_loss_without_taxonname(data, is_display_zero_gain)
 	end
-	def prettify_gain_loss_without_taxonname(statistics, key)
-		# output = []
-		# data = statistics[key]
-		# if data[:gain] > 0 then 
-		# 	output.push( data[:gain].to_s + "green" )
-		# end
-		# if data[:loss] > 0 then 
-		# 	output.push( data[:loss].to_s + "red" )
-		# end
-		# return output.join("_")
-		data = statistics[key]
-		data[:gain].to_s + "green_" + data[:loss].to_s + "red"
+	def prettify_gain_loss_without_taxonname(data, is_display_zero_gain)
+		if ( ! is_display_zero_gain)  && data[:gain] == 0 then 
+			gain = "-"
+		else
+			gain = data[:gain].to_s
+		end
+		gain + "green_" + data[:loss].to_s + "red"
 	end
 	# --- end helper methods for export_as_tree
 

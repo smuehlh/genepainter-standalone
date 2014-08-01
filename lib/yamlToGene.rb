@@ -28,7 +28,7 @@ class YamlToGene
 
 	def to_gene
 		# a gene object needs exons and introns (and the aligned sequence, which is added somewhere else)
-		
+
 		# method exons_original returns only exons, no alternative transkripts
 		exons_original.each do |exon|
 			exon_obj = Exon.new(exon["nucl_start"], exon["nucl_end"])

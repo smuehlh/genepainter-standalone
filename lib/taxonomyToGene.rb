@@ -79,7 +79,7 @@ class TaxonomyToGene
 	end
 
 	# issue an error while parsing user-provided species or taxonomy file
-	def error_while_parsing_file(file, line, msg)
+	def self.error_while_parsing_file(file, line, msg)
 		Helper.abort "Invalid syntax in file #{file} in line #{line}. #{msg}"
 	end
 
@@ -244,7 +244,7 @@ class TaxonomyToGene
 			lineage = line.split(";").map { |g| g.strip.capitalize } # remove leading and trailing white spaces, capitalize all taxa
 			if lineage.size < 2 then 
 				# lineage must consist at least of root and species
-				error_while_parsing_file(path, line, "Expected semicolon-separated list of taxa from root to species.")
+				self.class.error_while_parsing_file(path, line, "Expected semicolon-separated list of taxa from root to species.")
 			end
 			species = lineage[-1] # last taxon listed must be species
 			if @species_with_corresponding_genes[species] then 

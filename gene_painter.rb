@@ -1,6 +1,5 @@
 # !/usr/bin/env ruby
 
-require 'ruby-debug' # FIXME
 require 'yaml'
 
 # require .rb files in library (including all subfolders)
@@ -361,6 +360,7 @@ if options[:output_format_list].include?("extensive_tax") then
 end
 
 if options[:tax_options][:generate_list_intron_positios_per_taxon] then 
+	# only needed for webserver
 	f_out = options[:path_to_output] + "-taxonomy-intron-numbers.txt"
 	is_success = catch(:no_taxonomy) do 
 		output = gene_alignment_obj.export_as_taxonomy_list_of_intron_positions_per_taxon_only
