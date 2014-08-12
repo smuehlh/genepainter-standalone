@@ -200,10 +200,13 @@ class GeneAlignment2svg
 		# need max x-position for scaling: this is result of exons and introns, introns need to be scaled
 		x_pos_max = calc_max_x_pos
 		n_genes = 1 # draw only merged structure
-		y_pos = 0 # y_pos needs to start with 0
+		y_pos = 0.0 # y_pos needs to start with 0; in this case regardless of nested or not!
 
 		svg_obj = Svg.new(n_genes, x_pos_max, @is_default_color_scheme, true) # true: do not add extra space to canvas for legend!
 		svg <<  svg_obj.print_header
+		if @is_nested_svg then 
+		 	svg << svg_obj.print_nested_svg_header(y_pos)
+		end
 
 		# actual drawing
 
@@ -227,7 +230,9 @@ class GeneAlignment2svg
 
 			svg << svg_obj.draw_box(intron_startpos_drawing, intron_length, y_pos, intron_color, {class_name: class_name})
 		end
-
+		if @is_nested_svg then 
+			svg << svg_obj.print_nested_svg_footer
+		end
 		svg << svg_obj.print_footer
 
 		return svg.join("\n")

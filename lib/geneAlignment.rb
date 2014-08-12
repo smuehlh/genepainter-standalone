@@ -547,7 +547,7 @@ class GeneAlignment
 		# also, both formats can be requested at the same time
 		output_normal_format = nil
 		output_reduced_format = nil
-		is_nested_svg_elements = false # creates nested svg elements for easier positioning; not neccessary for the merged pattern
+		is_nested_svg_elements = options[:generate_nested_svg] # creates nested svg elements for easier positioning
 
 		if options[:reduced] || options[:both] then 
 			is_default_output = false

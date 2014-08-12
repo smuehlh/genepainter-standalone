@@ -292,8 +292,8 @@ def render_svg(tree, fontsize=12, spacing=2, textwidth=100,
     nodes, lines = tree_layout(tree)
     minvalue = min(n[2] for n in nodes if n[2] > 0)
     sx, sy = (float(minstep) / minvalue, fontsize + spacing)
-    image_width = max(x + w for x, y, w, text, isleaf in nodes) * sx + textwidth
-    image_height = sum(1 for node in nodes if node[4]) * sy
+    image_width = max(x + w for x, y, w, text, isleaf in nodes) * sx + textwidth + 1 # +1: avoid text cutting of at edge
+    image_height = sum(1 for node in nodes if node[4]) * sy + 1 # +1: avoid text cutting of at edge
     
     if image_width > maxwidth:
         sx = sx * (maxwidth - textwidth) / image_width
