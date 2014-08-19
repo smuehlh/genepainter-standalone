@@ -1,5 +1,6 @@
 # !/usr/bin/env ruby
 
+require 'ruby-debug' # FIXME
 require 'yaml'
 
 # require .rb files in library (including all subfolders)
@@ -236,7 +237,8 @@ gene_alignment_obj = GeneAlignment.new(gene_objects,
 	{ genes_belonging_to_selected_taxa: genes_belonging_to_selected_taxa || [], 
 		is_intron_exclusive_for_selected_taxa: options[:tax_options][:is_exclusive] || false 
 	},
-	options[:is_long_text_based_output]
+	options[:is_long_text_based_output], # force '-' between two intron-placeholders in different lines in text-based output
+	options[:output_not_reduced] # keep all '-' in text-based output (instead of removing the redundant ones)
 	)
 puts " done."
 
@@ -271,7 +273,7 @@ end
 puts "Prepare output ... "
 if options[:output_format_list].include?("alignment_with_intron_phases") then 
 	# this is in most cases the master format
-	output = gene_alignment_obj.export_as_alignment_with_introns
+	output = gene_alignment_obj.export_as_alignment_with_introns(options)
 	f_out = options[:path_to_output] + "-alignment.fas"
 	write_verbosely_output_to_file(f_out, output)
 end

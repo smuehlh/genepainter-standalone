@@ -38,7 +38,8 @@ class GeneAlignment
 	# Boolean: calculate statistics
 	# Hash taxonomy_options: genes_within_taxa: Array [subset of gene.names (belong to genes objects)], is_exclusive: Boolean [introns exclusive for selected taxa]
 	# Boolean: reduced exon-intron pattern contains no common gaps at all or one of each series
-	def initialize(genes, consensus_val, is_merged_pattern, taxonomy_options, sep_introns_in_plaintext_output)
+	# Boolean: output full instead of reduced exon-intron pattern
+	def initialize(genes, consensus_val, is_merged_pattern, taxonomy_options, sep_introns_in_plaintext_output, use_full_patterns_in_plaintext_output)
 
 		@genes = genes # containing all genes, independent of genestructures
 
@@ -46,6 +47,7 @@ class GeneAlignment
 		@intron_placeholder = nil # defaults to intron phase
 
 		@is_separate_introns_in_textbased_output = set_separate_introns_value(sep_introns_in_plaintext_output)
+		@is_use_full_pattern_in_plaintext_output = use_full_patterns_in_plaintext_output
 
 		# overwritten by method convert_to_exon_intron_pattern
 		@ind_consensus_pattern = nil
@@ -374,9 +376,21 @@ class GeneAlignment
 	def export_as_plain_txt(exon_placeholder_output, intron_placeholder_output )
 	
 		output = Array.new(@n_structures)
-
 		n_additional_structs = 0
-		@reduced_additional_structures.each_with_index do |struct, ind|
+		
+		# containing either reduced or full structures
+		structs_for_output = [] 
+		additional_structs_for_output = []
+
+		if @is_use_full_pattern_in_plaintext_output then 
+			structs_for_output = @aligned_genestructures
+			additional_structs_for_output = @additional_structures
+		else
+			structs_for_output = @reduced_aligned_genestructures
+			additional_structs_for_output = @reduced_additional_structures
+		end
+
+		additional_structs_for_output.each_with_index do |struct, ind|
 			if ind == @ind_merged_pattern then 
 				name = self.class.merged_structure_name
 			elsif ind == @ind_consensus_pattern
@@ -392,7 +406,7 @@ class GeneAlignment
 			n_additional_structs += 1
 		end
 
-		@reduced_aligned_genestructures.each_with_index do |struct, ind|
+		structs_for_output.each_with_index do |struct, ind|
 			# its a gene
 			name = @names_aligned_genestructures[ind]
 
@@ -771,7 +785,7 @@ class GeneAlignment
 		end
 		statistics[key][:species] |= [ gene.taxonomic_lineage.last ]
 		statistics[key][:genes] |= [ gene.name] 
-		statistics[key][:intronpos] |= gene.get_all_intronpositions
+		statistics[key][:intronpos] |= gene.get_all_intronpositions_merged_with_phase # gene.get_all_intronpositions # FIXME
 	end
 	def prettify_statisics(statistics, key)
 		data = statistics[key]

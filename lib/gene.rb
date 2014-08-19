@@ -312,6 +312,12 @@ class Gene
 		end
 	end
 
+	def get_all_intronpositions_merged_with_phase
+		get_all_introns_with_phase.collect do |pos, phase|
+			Intron.merge_position_and_phase(pos, phase)
+		end
+	end
+
 	# # a conserved intron is at same position and phase as an intron in another gene
 	# def get_all_conserved_introns
 	# 	@introns.select do |intron|

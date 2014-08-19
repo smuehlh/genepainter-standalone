@@ -32,6 +32,7 @@ class OptParser
 		options[:output_basename], options[:output_basepath] = "genepainter", "" # default prefix: "genepainter", located in genepainter source directory
 
 		options[:output_format_list] = ["txt_simple"] # which output should be generated
+		options[:output_not_reduced] = false
 		options[:range] = [] # restrict input alignment: use only "columns" within range
 		options[:ignore_common_gaps] = true # restrict input alignment: ignore gaps common to all sequences
 		options[:is_long_text_based_output] = true # text-based output contains one common gap between two introns
@@ -48,7 +49,7 @@ class OptParser
 		options[:select_by] = { regex: nil, list: nil, species: nil, no_selection: nil } # selection criteria: species, list, or regular expression
 
 		# hidden parameters
-		@hidden_params = ["--svg-merged", "--svg-nested", "--intron-numbers-per-taxon"]
+		@hidden_params = ["--svg-merged", "--svg-nested", "--intron-numbers-per-taxon", "--not-reduced"]
 
 
 		opt_parser = OptionParser.new do |opts|
@@ -105,6 +106,10 @@ class OptParser
 				else
 					Helper.abort "Invalid argument: --fuzzy expects a number larger than 0"
 				end
+			end
+			opts.on("--not-reduced", 
+				"Output patterns not reduced. This is hardly every usefull.") do
+				options[:output_not_reduced] = true
 			end
 
 			opts.separator ""
