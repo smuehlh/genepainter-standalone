@@ -12,6 +12,11 @@ module Helper
 		@fh_log.close
 	end
 
+	def log_error(function_error_was_raised, msg)
+		$stderr.puts "\nError while executing '#{function_error_was_raised}'"
+		log "Error while executing '#{function_error_was_raised}': #{msg}"
+	end
+
 	def abort(msg)
 		$stderr.puts "\nFatal error: #{msg.to_s}"
 		exit 1
@@ -80,6 +85,9 @@ module Helper
 		if genes_within_selected_taxa.any? then
 			puts "Genes belonging to selected taxa >#{selected_taxa.join(", ")}<: #{genes_within_selected_taxa.join(", ")}"
 			log "Genes belonging to selected taxa #{selected_taxa.join(", ")}: #{genes_within_selected_taxa.join(", ")}"
+		else
+			puts "No genes belonging to selected taxa >#{selected_taxa.join(", ")}<"
+			log "No genes belonging to selected taxa #{selected_taxa.join(", ")}"
 		end
 	end
 

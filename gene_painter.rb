@@ -32,6 +32,9 @@ def write_verbosely_output_to_file(f_name, output)
 	end
 	IO.write( f_name, output, :mode => "w" )
 end
+def log_fail_in_writing_output(f_name, msg)
+	puts "\t #{msg}: cannot write to #{f_name}"
+end
 
 ### open log file, and specify its automatic closure at_exit
 Helper.open_log( options[:path_to_log] )
@@ -179,23 +182,32 @@ common_names.each_with_index do |gene_name, ind|
 	end
 
 	# create a gene object with this structure and sequence
-	gene_obj = data_obj.to_gene # method to_gene returns a gene object containing the structure
-	gene_obj.add_aligned_seq(common_aligned_seqs[ind]) # ... and aligned sequence
-	gene_obj.reduce_gene_to_range(options[:range]) if options[:range].any?
-	gene_obj.add_taxonomy(taxonomy_obj.to_gene(gene_name)) if taxonomy_obj
+	is_success = catch(:error) do  
+		gene_obj = data_obj.to_gene # method to_gene returns a gene object containing the structure
+		gene_obj.add_aligned_seq(common_aligned_seqs[ind]) # ... and aligned sequence
+		gene_obj.reduce_gene_to_range(options[:range]) if options[:range].any?
+		gene_obj.add_taxonomy(taxonomy_obj.to_gene(gene_name)) if taxonomy_obj
+		gene_objects << gene_obj
 
-	gene_objects << gene_obj
-
-	# collect all positions of introns before gap-positions in aligned sequence
-	if options[:best_intron_pos] then 
-		gene_obj.get_all_gap_boundaries_preceeded_by_intron.each do |intron_pos, gap_end|
-			(introns_before_gap_pos_gene[intron_pos] ||= []).push( [gene_name, gap_end] )
+		# collect all positions of introns before gap-positions in aligned sequence
+		if options[:best_intron_pos] then 
+			gene_obj.get_all_gap_boundaries_preceeded_by_intron.each do |intron_pos, gap_end|
+				(introns_before_gap_pos_gene[intron_pos] ||= []).push( [gene_name, gap_end] )
+			end
 		end
+		true
 	end
-
+	if ! is_success then 
+		Helper.warn "Skipping gene #{gene_name}"
+	end
 end
 
 puts " done."
+
+if gene_objects.size == 0 then 
+	Helper.abort "0 genes selected. Nothing to do."
+end
+
 
 if options[:best_intron_pos] && introns_before_gap_pos_gene.any? then 
 	print "Correcting intron positions flanking alignment gaps ..."
@@ -207,7 +219,6 @@ end
 # inform which data are not used
 Helper.print_intersect_and_diff_between_alignment_and_gene(aligned_seqs_names, gene_names)
 if taxonomy_obj then 
-
 	options[:tax_options][:selected_taxa] ||= [] # set empty selected_taxa explicitly to empty array
 	genes_belonging_to_selected_taxa = options[:tax_options][:selected_taxa].collect do |taxon|
 		taxonomy_obj.get_genes_encoded_by_taxon(taxon)
@@ -273,62 +284,77 @@ end
 puts "Prepare output ... "
 if options[:output_format_list].include?("alignment_with_intron_phases") then 
 	# this is in most cases the master format
-	output = gene_alignment_obj.export_as_alignment_with_introns(options)
-	f_out = options[:path_to_output] + "-alignment.fas"
-	write_verbosely_output_to_file(f_out, output)
+	catch :error do 
+		output = gene_alignment_obj.export_as_alignment_with_introns
+		f_out = options[:path_to_output] + "-alignment.fas"
+		write_verbosely_output_to_file(f_out, output)
+	end
 end
 
 if options[:output_format_list].include?("txt_simple") then
-	output = gene_alignment_obj.export_as_plain_txt("-", "|")
-	f_out = options[:path_to_output] + "-std.txt"
-	write_verbosely_output_to_file(f_out, output)
+	catch(:error) do 
+		output = gene_alignment_obj.export_as_plain_txt("-", "|")
+		f_out = options[:path_to_output] + "-std.txt"
+		write_verbosely_output_to_file(f_out, output)
+	end
 end
 
 if options[:output_format_list].include?("txt_intron_phases") then
-	output = gene_alignment_obj.export_as_plain_txt("-", nil)
-	f_out = options[:path_to_output] + "-intron-phase.txt"
-	write_verbosely_output_to_file(f_out, output)
+	catch(:error) do 
+		output = gene_alignment_obj.export_as_plain_txt("-", nil)
+		f_out = options[:path_to_output] + "-intron-phase.txt"
+		write_verbosely_output_to_file(f_out, output)
+	end
 end
 		
 if options[:output_format_list].include?("txt_only_introns") then 
-	output = gene_alignment_obj.export_as_plain_txt(" ", "|")
-	f_out = options[:path_to_output] + "-spaces.txt"
-	write_verbosely_output_to_file(f_out, output)
+	catch(:error) do 
+		output = gene_alignment_obj.export_as_plain_txt(" ", "|")
+		f_out = options[:path_to_output] + "-spaces.txt"
+		write_verbosely_output_to_file(f_out, output)
+	end
 end
 
 if options[:output_format_list].include?("txt_phylo") then 
-	output = gene_alignment_obj.export_as_binary_alignment
-	f_out = options[:path_to_output] + "-phylo.fas"
-	write_verbosely_output_to_file(f_out, output)
+	catch :error do 
+        f_out = options[:path_to_output] + "-phylo.fas"
+		output = gene_alignment_obj.export_as_binary_alignment
+		write_verbosely_output_to_file(f_out, output)
+	end
 end
 
 if options[:output_format_list].include?("txt_fuzzy") then 
-	output = gene_alignment_obj.export_as_plain_text_with_fuzzy_intron_pos("-", "|", options[:fuzzy_window])
-	f_out = options[:path_to_output] + "-fuzzy.txt"
-	write_verbosely_output_to_file(f_out, output)
+	catch(:error) do 
+		output = gene_alignment_obj.export_as_plain_text_with_fuzzy_intron_pos("-", "|", options[:fuzzy_window])
+		f_out = options[:path_to_output] + "-fuzzy.txt"
+		write_verbosely_output_to_file(f_out, output)
+	end
 end
 
 if options[:output_format_list].include?("svg") then 
-	# svg creates normal, reduced or both output files
-	output1, output2 = gene_alignment_obj.export_as_svg( options[:svg_options] )
-	if output1 then 
-		f_out = options[:path_to_output] + "-normal.svg"
-		write_verbosely_output_to_file(f_out, output1)
-	end
-	if output2 then 
-		f_out = options[:path_to_output] + "-reduced.svg"
-		write_verbosely_output_to_file(f_out, output2)	
-	end
-	if options[:svg_options][:generate_merged_pattern] then 
-		# only needed for webserver, that uses a extra file containing only merged pattern
-		output1, output2 = gene_alignment_obj.export_as_svg_only_merged_pattern( options[:svg_options] )
+	catch :error do 
+		# svg creates normal, reduced or both output files
+		output1, output2 = gene_alignment_obj.export_as_svg( options[:svg_options] )
 		if output1 then 
-			f_out = options[:path_to_output] + "-normal-merged.svg"
+			f_out = options[:path_to_output] + "-normal.svg"
 			write_verbosely_output_to_file(f_out, output1)
 		end
 		if output2 then 
-			f_out = options[:path_to_output] + "-reduced-merged.svg"
-			write_verbosely_output_to_file(f_out, output2)
+			f_out = options[:path_to_output] + "-reduced.svg"
+			write_verbosely_output_to_file(f_out, output2)	
+		end
+
+		if options[:svg_options][:generate_merged_pattern] then 
+			# only needed for webserver, that uses a extra file containing only merged pattern
+			output1, output2 = gene_alignment_obj.export_as_svg_only_merged_pattern( options[:svg_options] )
+			if output1 then 
+				f_out = options[:path_to_output] + "-normal-merged.svg"
+				write_verbosely_output_to_file(f_out, output1)
+			end
+			if output2 then 
+				f_out = options[:path_to_output] + "-reduced-merged.svg"
+				write_verbosely_output_to_file(f_out, output2)
+			end
 		end
 	end
 end
@@ -336,61 +362,72 @@ end
 if options[:output_format_list].include?("pdb") then 
 	# pdb option creates two scripts
 	# no need to feed in gene names for which output should be generated
-	output1, output2 = gene_alignment_obj.export_as_pdb( options[:pdb_options] )
-	f_out = options[:path_to_output] + "-color_exons.py"
-	write_verbosely_output_to_file(f_out, output1)
-	f_out = options[:path_to_output] + "-color_splicesites.py"
-	write_verbosely_output_to_file(f_out, output2)
+	catch :error do 
+		output1, output2 = gene_alignment_obj.export_as_pdb( options[:pdb_options] )
+		f_out = options[:path_to_output] + "-color_exons.py"
+		write_verbosely_output_to_file(f_out, output1)
+		f_out = options[:path_to_output] + "-color_splicesites.py"
+		write_verbosely_output_to_file(f_out, output2)
+	end
 end
 
 if options[:output_format_list].include?("stats") then 
-	output = gene_alignment_obj.export_as_statistics("-", "|")
-	f_out = options[:path_to_output] + "-stats.txt"
-	write_verbosely_output_to_file(f_out, output)
+	catch :error do 
+		output = gene_alignment_obj.export_as_statistics("-", "|")
+		f_out = options[:path_to_output] + "-stats.txt"
+		write_verbosely_output_to_file(f_out, output)
+	end
 end
 
 if options[:output_format_list].include?("extensive_tax") then 
-	f_out = options[:path_to_output] + "-taxonomy.txt"
-	is_success = catch(:no_taxonomy) do
-		output = gene_alignment_obj.export_as_taxonomy
-		write_verbosely_output_to_file(f_out, output)
-		true
-	end
-	if ! is_success then 
-		puts "\t taxonomy is missing: cannot write to #{f_out}"
+	catch(:error) do 
+		f_out = options[:path_to_output] + "-taxonomy.txt"
+		is_success = catch(:no_taxonomy) do
+			output = gene_alignment_obj.export_as_taxonomy
+			write_verbosely_output_to_file(f_out, output)
+			true
+		end
+		if ! is_success then 
+			log_fail_in_writing_output("taxonomy is missing", f_out)
+		end
 	end
 end
 
 if options[:tax_options][:generate_list_intron_positios_per_taxon] then 
 	# only needed for webserver
-	f_out = options[:path_to_output] + "-taxonomy-intron-numbers.txt"
-	is_success = catch(:no_taxonomy) do 
-		output = gene_alignment_obj.export_as_taxonomy_list_of_intron_positions_per_taxon_only
-		write_verbosely_output_to_file(f_out, output)
-		true
-	end
-	if ! is_success then 
-		puts "\t taxonomy is missing: cannot write to #{f_out}"
+	catch :error do 
+		f_out = options[:path_to_output] + "-taxonomy-intron-numbers.txt"
+		is_success = catch(:no_taxonomy) do 
+			output = gene_alignment_obj.export_as_taxonomy_list_of_intron_positions_per_taxon_only
+			write_verbosely_output_to_file(f_out, output)
+			true
+		end
+		if ! is_success then 
+			log_fail_in_writing_output("taxonomy is missing", f_out)
+		end
 	end
 end
 
 if options[:output_format_list].include?("tree") then 
-	f_out_phb = options[:path_to_output] + "-tree.phb"
-	is_success = catch(:no_taxonomy) do 
-		output = gene_alignment_obj.export_as_tree
-		write_verbosely_output_to_file(f_out_phb, output)
-		f_out_svg = options[:path_to_output] + "-tree.svg"
-		path_to_python_script = File.join(File.dirname(__FILE__), 'tools', 'phb2svg.py')
-		is_success_python = system 'python', *[path_to_python_script, '--spacing=5', '--minstep=80', '--textwidth=150', f_out_phb, f_out_svg]
-		if ! is_success_python then 
-			Helper.log "Could not convert #{f_out_phb} to SVG."
-		else
-			puts "\t writing output to #{f_out_svg} ... "
+	catch(:error) do 
+		is_success = catch(:no_taxonomy) do 
+			f_out_phb = options[:path_to_output] + "-tree.phb"
+			output = gene_alignment_obj.export_as_tree
+			write_verbosely_output_to_file(f_out_phb, output)
+
+			f_out_svg = options[:path_to_output] + "-tree.svg"
+			path_to_python_script = File.join(File.dirname(__FILE__), 'tools', 'phb2svg.py')
+			is_success_python = system 'python', *[path_to_python_script, '--spacing=5', '--minstep=80', '--textwidth=150', f_out_phb, f_out_svg]
+			if ! is_success_python then 
+				Helper.log "Could not convert #{f_out_phb} to SVG."
+			else
+				puts "\t writing output to #{f_out_svg} ... "
+			end
+			true
 		end
-		true
-	end
-	if ! is_success then 
-		puts "\t taxonomy is missing: cannot write to #{f_out_phb}"
+		if ! is_success then 
+			log_fail_in_writing_output("taxonomy is missing", f_out_phb)
+		end
 	end
 end
 

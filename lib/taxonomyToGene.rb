@@ -25,6 +25,10 @@ class TaxonomyToGene
 		end
 
 		@taxa_with_tax_obj = convert_lineages_to_taxonomy_objs(species_with_corresponding_lineages) # Hash: key= taxon, value: taxonomie-object
+
+	rescue NoMethodError, TypeError, NameError, ArgumentError, Errno::ENOENT => exp
+    	Helper.log_error "initialize taxonomy", exp
+    	Helper.abort "Cannot read taxonomy."
 	end
 
 	# include taxonomic info in gene obj: full lineage of corresponding species and index of the first uniq ancestor of that species
@@ -52,6 +56,26 @@ class TaxonomyToGene
 		end
 		return ""
 	end
+
+    # returns genes encoded by children of input
+    def get_genes_encoded_by_taxon(taxon)
+            if @taxa_with_tax_obj[taxon] then     	
+                    return @taxa_with_tax_obj[taxon].leaves_below_this_node.collect do |child|
+                            get_genes_encoded_by_species(child)
+                    end
+            else
+                    return []
+            end
+    end
+    def get_genes_encoded_by_species(species)
+            if @species_with_corresponding_genes[species] then 
+                    return @species_with_corresponding_genes[species].uniq
+            else
+                    return []
+            end
+    end
+
+
 	def extract_full_lineage_and_first_uniq_ancestor_of(species)
 		lineage = []
 		ind = 0
@@ -301,6 +325,7 @@ class TaxonomyToGene
 				if ind != (lineage.size - 1 ) then 
 					descendant = lineage[ind+1]
 					tax_objs_by_name[taxon].add_descendant(descendant)
+					tax_objs_by_name[taxon].add_leaves(species)
 				end
 			else
 				# create object

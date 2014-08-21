@@ -1,18 +1,25 @@
 module Sequence
 	extend self
 
-	# optional parameter: is_return_pos_before_gap: return position of last aa before gap, instead of last gap pos if applicable
+ 	# optional parameter: is_return_pos_before_gap: return position of last aa before gap, instead of last gap pos if applicable
     def sequence_pos2alignment_pos(spos, aseq, is_return_pos_before_gap=true)
         pats = []
 
-		tmp_aseq = aseq.gsub("-", "")
-		tmp_aseq = tmp_aseq.gsub("*", "@")
-		tmp_aseq[0..spos].split("").each {|chr| pats << ("-*" + chr)}
+        aseq_wo_gaps = aseq.delete("-")
+		aseq_wo_gaps[0..spos].split("").each do |chr| 
+			pat = "-*"
+			if chr == "*" then 
+				# a stop codon (denoted by '*'), escape it!
+				pat += "\\*"
+			else
+				pat += chr
+			end
+			pats << pat
+		end
        	if ! is_return_pos_before_gap then 
                 # add pattern for trailing gap
                 pats.push("-*")
         end
-
         pat = Regexp.new(pats.join)
         pat.match(aseq)[0].length - 1
     end
@@ -65,6 +72,10 @@ module Sequence
 			Helper.abort "Error while parsing multiple sequence alignment. Number of fasta header and sequences does not match." 
 		end
 		return names, seqs
+
+    rescue NoMethodError, TypeError, NameError, ArgumentError, Errno::ENOENT => exp
+    	Helper.log_error "read_in_alignment", exp
+    	Helper.abort "Cannot read alignment."
 	end
 
 	def convert_strings_to_fasta(fasta_header, fasta_seq)
@@ -110,6 +121,9 @@ module Sequence
 		end
 
 		return used_seqs
+    rescue NoMethodError, TypeError, NameError, ArgumentError, Errno::ENOENT => exp
+    	Helper.log_error "ensure_seqs_have_same_length", exp
+    	Helper.abort "Cannot ensure all aligned sequences have same length."		
 	end
 
 	# remove common gaps from seqs - array
@@ -207,6 +221,10 @@ module Sequence
 		end
 
 		return reduced_seqs
+    rescue NoMethodError, TypeError, NameError, ArgumentError, Errno::ENOENT => exp
+    	Helper.log_error "remove_common_gaps", exp
+    	Helper.abort "Cannot remove common gaps in alignment."
+
 	end
 
 	def is_array_of_common_gaps(arr, gap_symbol="-")
@@ -261,6 +279,10 @@ module Sequence
 				end
 			end
 		end
+
+    rescue NoMethodError, TypeError, NameError, ArgumentError, Errno::ENOENT => exp
+    	Helper.log_error "correct_introns_flanking_gaps", exp
+    	Helper.abort "Cannot correct intron positions flanking alignment gaps."		
 	end
 
 end

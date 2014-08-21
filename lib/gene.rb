@@ -18,7 +18,7 @@ class Gene
 	def add_aligned_seq(aligned_seq)
 		@aligned_seq = aligned_seq
 		@exons.each do |exon|
-			exon.set_variables_describing_exon_in_aligned_seq(aligned_seq)
+			exon.set_variables_describing_exon_in_aligned_seq(aligned_seq)		
 		end
 		@introns.each do |intron|
 			intron.set_variables_describing_intron_in_aligned_seq(aligned_seq)
@@ -248,7 +248,8 @@ class Gene
 		if @aligned_seq.empty? ||
 			@exons.empty? then  
 			# every gene should have still min. 1 exon
-			Helper.abort "Cannot reduce gene #{@name} to range."
+			Helper.warn "Cannot reduce gene #{@name} to range."
+			throw :error
 		end
 	end
 

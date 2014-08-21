@@ -59,7 +59,9 @@ class GeneAlignment
 		@reduced_aligned_genestructures, @reduced_additional_structures = reduce_exon_intron_pattern() # reduce gene structures to "needed" parts 
 
 		@n_structures = calc_n_structures
-
+	rescue NoMethodError, TypeError, NameError, ArgumentError, Errno::ENOENT => exp
+    	Helper.log_error "initialize gene alignment", exp
+    	Helper.abort "Cannot create gene alignment."
 	end
 
 	def calc_n_structures
@@ -251,6 +253,9 @@ class GeneAlignment
 		@reduced_aligned_genestructures, @reduced_additional_structures = reduce_exon_intron_pattern()
 
 		@n_structures = calc_n_structures
+    rescue NoMethodError, TypeError, NameError, ArgumentError, Errno::ENOENT => exp
+    	Helper.log_error "reduce_gene_set_for_output", exp
+    	Helper.abort "Cannot reduce gene set for output."
 	end	
 
 	def reduce_exon_intron_pattern(opts={})
@@ -333,6 +338,10 @@ class GeneAlignment
 		end
 
 		return output.join("\n")
+
+    rescue NoMethodError, TypeError, NameError, ArgumentError, Errno::ENOENT => exp
+    	Helper.log_error "export_as_alignment_with_introns", exp
+    	throw(:error)
 	end
 
 	def export_as_binary_alignment
@@ -369,8 +378,11 @@ class GeneAlignment
 
 			output[ind + n_additional_structs] = Sequence.convert_strings_to_fasta( name, struct )		
 		end
-
 		return output.join("\n")
+
+    rescue NoMethodError, TypeError, NameError, ArgumentError, Errno::ENOENT => exp
+    	Helper.log_error "export_as_binary_alignment", exp
+    	throw(:error)
 	end
 
 	def export_as_plain_txt(exon_placeholder_output, intron_placeholder_output )
@@ -416,8 +428,11 @@ class GeneAlignment
 			output[ind+n_additional_structs] = [name, struct].join("")
 					
 		end
-
 		return output.join("\n")
+
+    rescue NoMethodError, TypeError, NameError, ArgumentError, Errno::ENOENT => exp
+    	Helper.log_error "export_as_plain_txt", exp
+    	throw(:error)
 	end
 
 	# generates three-fold output
@@ -516,6 +531,10 @@ class GeneAlignment
 		output[2] << reduced_fuzzy_pattern.join("\n")
 
 		return output.join("\n")
+
+    rescue NoMethodError, TypeError, NameError, ArgumentError, Errno::ENOENT => exp
+    	Helper.log_error "export_as_plain_text_with_fuzzy_intron_pos", exp
+    	throw(:error)
 	end
 
 	def export_as_svg(options)
@@ -550,7 +569,12 @@ class GeneAlignment
 		end
 
 		return output_normal_format, output_reduced_format
+
+    rescue NoMethodError, TypeError, NameError, ArgumentError, Errno::ENOENT => exp
+    	Helper.log_error "export_as_svg", exp
+    	throw(:error)
 	end
+
 	def export_as_svg_only_merged_pattern(options)
 
 		gene_objs_for_output = @genes.select do |gene|
@@ -583,7 +607,12 @@ class GeneAlignment
 			output_normal_format = genealignment2svg_obj.create_svg_merged_genestructure
 		end
 		return output_normal_format, output_reduced_format
+
+    rescue NoMethodError, TypeError, NameError, ArgumentError, Errno::ENOENT => exp
+    	Helper.log_error "export_as_svg", exp
+    	throw(:error)
 	end
+
 	def export_as_pdb(options)
 		output = []
 		Helper.log "\nMap gene structures onto PDB #{options[:path_to_pdb]}"
@@ -649,6 +678,10 @@ class GeneAlignment
 		genealignment2pdb_obj.log_alignment(ref_name, options[:path_to_pdb])
 
 		return output1, output2
+
+    rescue NoMethodError, TypeError, NameError, ArgumentError, Errno::ENOENT => exp
+    	Helper.log_error "export_as_pdb", exp
+    	throw(:error)		
 	end
 
 	def export_as_tree
@@ -745,9 +778,12 @@ class GeneAlignment
 				taxa_with_alternative_names[node] = prettify_gain_loss( data, node, is_display_zero_gain )
 			end
 		end
-
 		output = tree_obj.export_tree(taxa_with_alternative_names)
 		return output
+
+    rescue NoMethodError, TypeError, NameError, ArgumentError, Errno::ENOENT => exp
+    	Helper.log_error "export_as_tree", exp
+    	throw(:error)	
 	end
 	# --- begin helper methods for export_as_tree
 	def find_last_common_ancestor(all_lineages, common_ancestors, taxa_intron_first_found)
@@ -785,7 +821,7 @@ class GeneAlignment
 		end
 		statistics[key][:species] |= [ gene.taxonomic_lineage.last ]
 		statistics[key][:genes] |= [ gene.name] 
-		statistics[key][:intronpos] |= gene.get_all_intronpositions_merged_with_phase # gene.get_all_intronpositions # FIXME
+		statistics[key][:intronpos] |= gene.get_all_intronpositions_merged_with_phase
 	end
 	def prettify_statisics(statistics, key)
 		data = statistics[key]
@@ -858,6 +894,10 @@ class GeneAlignment
 		)
 
 		return reduced_output.join("\n")
+
+    rescue NoMethodError, TypeError, NameError, ArgumentError, Errno::ENOENT => exp
+    	Helper.log_error "export_as_taxonomy", exp
+    	throw(:error)	
 	end
 
 	# this method is for genepainter webserver only
@@ -883,6 +923,10 @@ class GeneAlignment
 			output[ind] = "#{taxon}:#{intron_numbers.join(",")}"
 		end
 		return output.join("\n")
+
+    rescue NoMethodError, TypeError, NameError, ArgumentError, Errno::ENOENT => exp
+    	Helper.log_error "export_as_taxonomy", exp
+    	throw(:error)			
 	end
 
 	# information about every intron position
@@ -924,6 +968,10 @@ class GeneAlignment
 			end
 		end
 		return [genestructures_with_legend, info_per_intronpos].join("\n")
+
+    rescue NoMethodError, TypeError, NameError, ArgumentError, Errno::ENOENT => exp
+    	Helper.log_error "export_as_statistics", exp
+    	throw(:error)	
 	end
 
 	def get_first_uniq_ancestors_with_frequencies_by_genes(taxon_first_found, genes)
