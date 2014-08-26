@@ -136,7 +136,6 @@ if options[:ignore_common_gaps] then
 	) 
 end
 
-
 # special case: gap before/after intron
 # correct intron position (default: before gap) if there is any other sequence with and intron at same pos as gap-end
 introns_before_gap_pos_gene = {}
@@ -388,7 +387,7 @@ if options[:output_format_list].include?("extensive_tax") then
 			true
 		end
 		if ! is_success then 
-			log_fail_in_writing_output("taxonomy is missing", f_out)
+			log_fail_in_writing_output( f_out, "taxonomy is missing")
 		end
 	end
 end
@@ -403,15 +402,15 @@ if options[:tax_options][:generate_list_intron_positios_per_taxon] then
 			true
 		end
 		if ! is_success then 
-			log_fail_in_writing_output("taxonomy is missing", f_out)
+			log_fail_in_writing_output( f_out, "taxonomy is missing")
 		end
 	end
 end
 
 if options[:output_format_list].include?("tree") then 
 	catch(:error) do 
+		f_out_phb = options[:path_to_output] + "-tree.phb"
 		is_success = catch(:no_taxonomy) do 
-			f_out_phb = options[:path_to_output] + "-tree.phb"
 			output = gene_alignment_obj.export_as_tree
 			write_verbosely_output_to_file(f_out_phb, output)
 
@@ -425,8 +424,9 @@ if options[:output_format_list].include?("tree") then
 			end
 			true
 		end
+
 		if ! is_success then 
-			log_fail_in_writing_output("taxonomy is missing", f_out_phb)
+			log_fail_in_writing_output( f_out_phb, "taxonomy is missing")
 		end
 	end
 end

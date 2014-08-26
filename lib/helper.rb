@@ -82,12 +82,14 @@ module Helper
 			puts "Taxonomy for: #{genes_with_taxonomy.join(", ")}."
 			log "Genes with taxonomic information: #{genes_with_taxonomy.join(", ")}."
 		end
-		if genes_within_selected_taxa.any? then
-			puts "Genes belonging to selected taxa >#{selected_taxa.join(", ")}<: #{genes_within_selected_taxa.join(", ")}"
-			log "Genes belonging to selected taxa #{selected_taxa.join(", ")}: #{genes_within_selected_taxa.join(", ")}"
-		else
-			puts "No genes belonging to selected taxa >#{selected_taxa.join(", ")}<"
-			log "No genes belonging to selected taxa #{selected_taxa.join(", ")}"
+		if selected_taxa.any? then 
+			if genes_within_selected_taxa.any? then
+				puts "Genes belonging to selected taxa >#{selected_taxa.join(", ")}<: #{genes_within_selected_taxa.join(", ")}"
+				log "Genes belonging to selected taxa #{selected_taxa.join(", ")}: #{genes_within_selected_taxa.join(", ")}"
+			else
+				puts "No genes belonging to selected taxa >#{selected_taxa.join(", ")}<"
+				log "No genes belonging to selected taxa #{selected_taxa.join(", ")}"
+			end
 		end
 	end
 
