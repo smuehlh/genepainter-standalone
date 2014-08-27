@@ -5,8 +5,6 @@ require File.join(File.expand_path("..",File.dirname(__FILE__)), 'lib', 'sequenc
 require File.join(File.expand_path("..",File.dirname(__FILE__)), 'lib', 'helper.rb')
 require File.join(File.expand_path("..",File.dirname(__FILE__)), 'lib', 'geneAlignment.rb')
 
-require 'ruby-debug' # FIXME
-
 # read in several, full exon-intron-patterns and combines them into single, reduced exon-intron pattern
 
 def parse(args)

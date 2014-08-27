@@ -335,7 +335,7 @@ class OptParser
 				end
 				# range_start should be smaller than r_stop
 				if range[0] >= range[1] then 
-					Helper.abort "Invalid range definition in #{range}: start must be less than than stop"
+					Helper.abort "Invalid range definition in #{range}: start must be less than stop"
 				end
 				# _end sanity check
 				options[:range]= {
