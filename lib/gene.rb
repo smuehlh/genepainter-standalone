@@ -39,7 +39,6 @@ class Gene
 		is_delete_range = range[:is_delete_range]
 
 		range[:reverse_position].each_slice(2) do |range_end, range_start|
-puts "#{range_start}-#{range_end}"
 			reduce_gene_to_single_range( range_start, range_end, is_delete_range )
 		end
 	end
@@ -49,7 +48,6 @@ puts "#{range_start}-#{range_end}"
 
 		# sanity check: range end must not be outside aligned sequence
 		if range_end >= @aligned_seq.size then 
-puts @aligned_seq.size
 			Helper.abort "end position of range #{range_start}-#{range_end} exceeds alignment."
 		end
 

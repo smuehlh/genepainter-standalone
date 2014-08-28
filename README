@@ -137,6 +137,8 @@ General options:
         --path-to-output <path>      Path to location for the output file(s)
                                      Default: same location as GenePainter source files
         --range START,STOP           Restrict genes to range START-STOP in alignment
+                                     Might also be list if format START1,STOP1,START2,STOP2
+                                     Keyword 'end' might be used to mark last position in alignment
         --[no-]delete-range          (Not) Delete specified range
         --keep-common-gaps           Keep common gaps in alignment
         --no-best-position-introns   Plot introns always onto beginning of a gap
