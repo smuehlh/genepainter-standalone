@@ -33,7 +33,7 @@ class OptParser
 
 		options[:output_format_list] = ["txt_simple"] # which output should be generated
 		options[:output_not_reduced] = false
-		options[:range] = [] # restrict input alignment: use only "columns" within range
+		options[:range] = { reverse_position: [], is_delete_range: false } # restrict input alignment: use only "columns" within range
 		options[:ignore_common_gaps] = true # restrict input alignment: ignore gaps common to all sequences
 		options[:is_long_text_based_output] = true # text-based output contains one common gap between two introns
 		options[:consensus] = false # add consenus profile to output ?
@@ -324,28 +324,42 @@ class OptParser
 			end
 
 			opts.on("--range START,STOP", Array,
-				"Restrict genes to range START-STOP in alignment") do |range|
-				range = range.map(&:to_i)
+				"Restrict genes to range START-STOP in alignment", 
+				"Might also be list if format START1,STOP1,START2,STOP2",
+				"Keyword 'end' might be used to mark last position in alignment") do |range|
+				# range = range.map(&:to_i)
+				range = range.map do |ele| 
+					if ele.downcase == "end" then 
+						1.0/0.0 # Infinity value
+					else
+						num = ele.to_i # each non-number is mapped onto zero
+						Helper.abort "Invalid argument: --range expects comma-separated list of natural numbers." if num <= 0
+						Helper.human2ruby_counting( ele.to_i ) 
+					end
+				end
 
 				# sanity check
-				# range should be 2 natural numbers
-				if range.size != 2 || range.inject(:*) == 0 then
-					# number of args wrong or at least one is zero
-					Helper.abort "Invalid argument: --range expects two comma-separated numbers without spaces"
+				# range should be 2 (or multiple of two) natural numbers
+				if range.size % 2 != 0 then
+					Helper.abort "Invalid argument: --range expects two (or multiple of two) comma-separated natural numbers without spaces"
 				end
 				# range_start should be smaller than r_stop
-				if range[0] >= range[1] then 
-					Helper.abort "Invalid range definition in #{range}: start must be less than stop"
+				range.each_slice(2) do |r_start, r_stop|
+					if r_stop != "end" && r_start >= r_stop then 
+						Helper.abort "Invalid range definition in #{range}: start #{r_start} must be less than stop #{r_stop}"
+					end
 				end
 				# _end sanity check
-				options[:range]= {
-					position: [ Helper.human2ruby_counting(range[0]), Helper.human2ruby_counting(range[1]) ], is_delete_range: false
-					}
+			options[:range][:reverse_position] = range.sort.reverse
+				# options[:range][:position] = {
+					# position: range, is_delete_range: false
+					# }			
 			end
 
 			opts.on("--[no-]delete-range", 
 				"(Not) Delete specified range") do |opt|
-				vivify_hash(options, :range, :is_delete_range, opt)
+				options[:range][:is_delete_range] = opt
+				# vivify_hash(options, :range, :is_delete_range, opt)
 			end
 
 			opts.on("--keep-common-gaps", 
@@ -470,7 +484,7 @@ class OptParser
 		return options
 
 		# use the own format of fatal error messages!				
-		rescue OptionParser::MissingArgument, OptionParser::InvalidArgument, OptionParser::InvalidOption => exc
+		rescue OptionParser::MissingArgument, OptionParser::InvalidArgument, OptionParser::InvalidOption, OptionParser::AmbiguousOption => exc
 			Helper.abort exc
 	end # parse()
 

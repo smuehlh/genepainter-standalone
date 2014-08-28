@@ -126,6 +126,39 @@ module Sequence
     	Helper.abort "Cannot ensure all aligned sequences have same length."		
 	end
 
+	# seqs [Array]: array of strings, each must be of same length
+	# range [Hash]: range parameters
+		# key reverser_position [Array]: List of positions in sequence
+	# range[:reverse_position] might contain keyword Infinity, which stands for "last pos in alignment"
+	# replace this keyword by the actuall last position
+	def replace_range_keyword_end_of_alignment_by_position(seqs, range)
+		if range[:reverse_position] && range[:reverse_position][0] then 
+			range[:reverse_position][0] = seqs[0].size - 1 # -1 as seqs[seqs.size] is nil
+		end
+	end
+
+	def remove_common_gaps_in_alignment_update_predefined_ranges(seqs, range)
+		reduced_seqs, deleted_pos = remove_common_gaps(seqs, 
+			{
+				delete_all_common_gaps: true, # remove all common gaps
+				return_deleted_cols: true # return indices of columns that were deleted
+			}
+			)
+
+		range_pos_in_reduced_seq = []
+		range[:reverse_position].each_slice(2) do |range_end, range_start|
+			n_deleted_cols_until_range_start = deleted_pos.select{|pos| pos < range_start}.size
+			n_deleted_cols_until_range_end = deleted_pos.select{|pos| pos <= range_end}.size
+
+			range_pos_in_reduced_seq.push range_end - n_deleted_cols_until_range_end
+			range_pos_in_reduced_seq.push range_start - n_deleted_cols_until_range_start
+		end
+
+		range[:reverse_position] = range_pos_in_reduced_seq
+
+		return reduced_seqs
+	end
+
 	# remove common gaps from seqs - array
 	# seqs [Array]: array of strings, each string must be of same length
 	# opts [Hash]: options, each has a default value
@@ -134,13 +167,20 @@ module Sequence
 	# 			key delete_all_common_gaps [Boolean]: delete all common gaps or keep one of each consecutive common gaps, default: false
 	# 			key ensure_common_gap_between_consecutive_non_gaps [Boolean]: always have one common gap between two non-gaps, default: true
 	# 																			only applicable in combination with delete_all_common_gaps == false
+	# 			key return_deleted_cols [Boolean]: return array with all deleted columns, default: false 
+	# 												only applicable in combination with delete_all_common_gaps == true
 	def remove_common_gaps(seqs, opts={})
 		gap_symbol = opts[:gap_symbol] || "-"
 		start_col = opts[:start_col] || 0
 		is_delete_all_common_gaps = false # default: keep one common gap of consecutive ones
 		is_always_common_gap_between_two_non_gaps = nil # this option becomes only active when is_delete_all_common_gaps = false
+		is_return_deleted_pos = false # this option becomes only active when is_delete_all_common_gaps = true
 		if opts[:delete_all_common_gaps] then 
 			is_delete_all_common_gaps = true
+			if opts.has_key?(:return_deleted_cols) &&
+				opts[:return_deleted_cols] == true then 
+				is_return_deleted_pos = true
+			end
 		else
 			is_delete_all_common_gaps = false
 			is_always_common_gap_between_two_non_gaps = true # default: always have a common gap between two non-gaps (insert one if need is)
@@ -153,6 +193,7 @@ module Sequence
 		reduced_seqs = seqs.map {|ele| ele.dup} # iterate of this set of sequences to keep the input seqs unchanged
 		last_col = reduced_seqs.first.size
 		last_col_to_keep = last_col-1 # -1: index starts with 0
+		deleted_pos = []
 
 		(last_col-1).downto(start_col) do |col|
 			content_this_col = reduced_seqs.collect { |seq| seq[col] }
@@ -163,6 +204,7 @@ module Sequence
 
 				if is_only_gaps_this_col then 
 					reduced_seqs.each { |seq| seq.slice!(col) }
+					deleted_pos.push col
 				end
 			else
 				# delete all consecutive common gaps but one
@@ -220,7 +262,11 @@ module Sequence
 			end
 		end
 
-		return reduced_seqs
+		if is_return_deleted_pos then 
+			return reduced_seqs, deleted_pos
+		else
+			return reduced_seqs
+		end
     rescue NoMethodError, TypeError, NameError, ArgumentError, Errno::ENOENT => exp
     	Helper.log_error "remove_common_gaps", exp
     	Helper.abort "Cannot remove common gaps in alignment."

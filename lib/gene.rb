@@ -34,24 +34,33 @@ class Gene
 		@ind_first_uniq_ancestor = ind 
 	end
 
-	# range might be positive or negative range: keep only range or keep everything but range
 	def reduce_gene_to_range(range)
-		range_start = range[:position][0]
-		range_end = range[:position][1]
+		# range_end might be Infinity, which means the last aligment position should be used!
+		is_delete_range = range[:is_delete_range]
+
+		range[:reverse_position].each_slice(2) do |range_end, range_start|
+puts "#{range_start}-#{range_end}"
+			reduce_gene_to_single_range( range_start, range_end, is_delete_range )
+		end
+	end
+
+	# range might be positive or negative range: keep only range or keep everything but range
+	def reduce_gene_to_single_range(range_start, range_end, is_delete_range)
 
 		# sanity check: range end must not be outside aligned sequence
 		if range_end >= @aligned_seq.size then 
-			Helper.abort "end position of range exceeds alignment."
+puts @aligned_seq.size
+			Helper.abort "end position of range #{range_start}-#{range_end} exceeds alignment."
 		end
 
 		introns_within_range = []
 		exons_within_range = []
 		aligned_seq_within_range = ""
 
-		if range[:is_delete_range] then 
+		if is_delete_range then 
 			# delete range
 
-			# maybe variable name is abit missleading, but aligned_seq_within_range is sequence _outside range to del_
+			# maybe variable name is a bit missleading, but aligned_seq_within_range is sequence _outside range to del_
 			aligned_seq_within_range = @aligned_seq[0...range_start] + @aligned_seq[range_end+1..-1]
 			aligned_seq_deleted = @aligned_seq[range_start..range_end] # inclusive range_end
 

@@ -129,11 +129,13 @@ end
 # make sure all _needed_ aligned sequences are of same length
 common_aligned_seqs = Sequence.ensure_seqs_have_same_length(aligned_seqs, aligned_seqs_names, common_names)
 
+# fix range position "Infinity", that should be evaluated to "last position in alignment"
+Sequence.replace_range_keyword_end_of_alignment_by_position(common_aligned_seqs, options[:range])
+
 # remove common gaps if neccessary
 if options[:ignore_common_gaps] then 
-	common_aligned_seqs = Sequence.remove_common_gaps(common_aligned_seqs, 
-		{delete_all_common_gaps: true} # remove all common gaps
-	) 
+	common_aligned_seqs =
+		Sequence.remove_common_gaps_in_alignment_update_predefined_ranges(common_aligned_seqs, options[:range] ) 
 end
 
 # special case: gap before/after intron
@@ -184,7 +186,7 @@ common_names.each_with_index do |gene_name, ind|
 	is_success = catch(:error) do  
 		gene_obj = data_obj.to_gene # method to_gene returns a gene object containing the structure
 		gene_obj.add_aligned_seq(common_aligned_seqs[ind]) # ... and aligned sequence
-		gene_obj.reduce_gene_to_range(options[:range]) if options[:range].any?
+		gene_obj.reduce_gene_to_range(options[:range]) if options[:range][:reverse_position].any?
 		gene_obj.add_taxonomy(taxonomy_obj.to_gene(gene_name)) if taxonomy_obj
 		gene_objects << gene_obj
 
