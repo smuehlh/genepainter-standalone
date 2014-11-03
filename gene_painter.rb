@@ -101,7 +101,7 @@ if species = options[:select_by][:species] then
 		species2genes = taxonomy_obj.species_with_corresponding_genes
 	else 
 		# parse species-to-genename-mapping
-		species2genes = TaxonomyToGene.map_genenames_to_speciesnames(options[:tax_options][:path_to_tax_mapping])
+		species2genes = TaxonomyToGene.map_genenames_to_speciesnames(options[:tax_options][:path_to_tax_mapping], common_names)
 	end
 
 	if species2genes[species] then 

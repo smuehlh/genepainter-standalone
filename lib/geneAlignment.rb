@@ -629,7 +629,7 @@ class GeneAlignment
 		if options[:pdb_reference_protein] then 
 			# use specified seq
 			name = options[:pdb_reference_protein]
-			if name.starts_with?(">") then
+			if name.start_with?(">") then
 				name = name[1..-1]
 			end
 			ind_ref_name = @names_aligned_genestructures.index(name)
@@ -679,9 +679,9 @@ class GeneAlignment
 
 		return output1, output2
 
-    rescue NoMethodError, TypeError, NameError, ArgumentError, Errno::ENOENT => exp
-    	Helper.log_error "export_as_pdb", exp
-    	throw(:error)		
+    # rescue NoMethodError, TypeError, NameError, ArgumentError, Errno::ENOENT => exp
+    # 	Helper.log_error "export_as_pdb", exp
+    # 	throw(:error)		
 	end
 
 	def export_as_tree
