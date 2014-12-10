@@ -69,13 +69,14 @@ class GeneAlignment
 	end
 
 	def set_separate_introns_value(sep_introns_in_plaintext_output)
-		@is_separate_introns_in_textbased_output = sep_introns_in_plaintext_output 
-		if @is_separate_introns_in_textbased_output.nil? then 
+		boolean = sep_introns_in_plaintext_output 
+		if boolean.nil? then 
 			# if not explicitly set, set value in relation to number of intron positions (to keep output small)
 			if @stats_per_intron_pos.keys.size > self.class.max_introns_for_long_reduced_output then 
-				@is_separate_introns_in_textbased_output = false
+				boolean = false
 			end	
 		end
+		return boolean
 	end
 
 	def get_gene_obj_by_name(searched_name)
