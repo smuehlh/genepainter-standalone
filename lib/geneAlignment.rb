@@ -945,11 +945,11 @@ class GeneAlignment
 		# second part of output
 		sorted_intron_positions = @stats_per_intron_pos.keys.sort
 		info_per_intronpos = Array.new( @stats_per_intron_pos.size + 1 ) # +1 for header
-		info_per_intronpos[0] = "Intron number\t# introns in all data"
+		info_per_intronpos[0] = "Intron\t# Introns"
 		# does any intron have a last common ancestor?
 		is_add_tax_info = @stats_per_intron_pos.collect{|k, v| v[:taxon_first_found]}.compact.any?
 		if is_add_tax_info then 
-			info_per_intronpos[0] += "\tlast common ancestor of corresponding taxa\tfirst unique ancestor"
+			info_per_intronpos[0] += "\tLast common ancestor\tFirst unique ancestor"
 		end
 		sorted_intron_positions.each_with_index do |intronpos, intron_number|
 			index_output_array = intron_number + 1
@@ -1077,7 +1077,7 @@ class GeneAlignment
 		end
 
 		# add legend to output
-		legend_name = convert_string_to_chopped_fasta_header("Intron number")
+		legend_name = convert_string_to_chopped_fasta_header("Intron")
 		legend = legend.join("").gsub("-"," ")
 		output[-1] = [legend_name,legend].join("")
 
