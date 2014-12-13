@@ -299,6 +299,7 @@ class Svg
 		end
 
 		def box(x, y, width, height, color, my_class)
+			width = 0 if width < 0 
 			return "<rect x=\"#{x}\" "\
 				"y=\"#{y}\" "\
 				"width=\"#{width}\" "\
