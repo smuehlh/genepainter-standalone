@@ -949,7 +949,7 @@ class GeneAlignment
 		# does any intron have a last common ancestor?
 		is_add_tax_info = @stats_per_intron_pos.collect{|k, v| v[:taxon_first_found]}.compact.any?
 		if is_add_tax_info then 
-			info_per_intronpos[0] += "\tLast common ancestor\tFirst unique ancestor"
+			info_per_intronpos[0] += "\tLast common ancestor\tFirst unique ancestor (# Introns)"
 		end
 		sorted_intron_positions.each_with_index do |intronpos, intron_number|
 			index_output_array = intron_number + 1
