@@ -921,7 +921,7 @@ class GeneAlignment
 			# map intron pos to intron number
 			gained = data[:gained].map{|ele| intronpos_with_numbers[ele]}
 			all = data[:all].map{|ele| intronpos_with_numbers[ele]}
-			output[ind] = "\"#{node}\"" + ":" + gained.sort.join(",") + ":" + all.sort.join(",")
+			output[ind] = node + ":" + gained.sort.join(",") + ":" + all.sort.join(",")
 		end
 
 		return output.join("\n")
