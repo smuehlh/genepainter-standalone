@@ -394,27 +394,18 @@ if options[:output_format_list].include?("extensive_tax") then
 	end
 end
 
-if options[:tax_options][:generate_list_intron_positios_per_taxon] then 
-	# only needed for webserver
-	catch :error do 
-		f_out = options[:path_to_output] + "-taxonomy-intron-numbers.txt"
-		is_success = catch(:no_taxonomy) do 
-			output = gene_alignment_obj.export_as_taxonomy_list_of_intron_positions_per_taxon_only
-			write_verbosely_output_to_file(f_out, output)
-			true
-		end
-		if ! is_success then 
-			log_fail_in_writing_output( f_out, "taxonomy is missing")
-		end
-	end
-end
-
 if options[:output_format_list].include?("tree") then 
+	# generate tree
 	catch(:error) do 
 		f_out_phb = options[:path_to_output] + "-tree.phb"
 		is_success = catch(:no_taxonomy) do 
-			output = gene_alignment_obj.export_as_tree
-			write_verbosely_output_to_file(f_out_phb, output)
+			# optional: list of intron pos per node; only needed by webserver
+			is_list_intron_pos = options[:tax_options][:generate_list_intron_positios_per_taxon]
+
+			output1, output2 = gene_alignment_obj.export_as_tree( {is_list_intron_pos: is_list_intron_pos})
+
+			# write tree
+			write_verbosely_output_to_file(f_out_phb, output1)
 
 			f_out_svg = options[:path_to_output] + "-tree.svg"
 			path_to_python_script = File.join(File.dirname(__FILE__), 'tools', 'phb2svg.py')
@@ -424,6 +415,13 @@ if options[:output_format_list].include?("tree") then
 			else
 				puts "\t writing output to #{f_out_svg} ... "
 			end
+
+			# write optional output
+			if is_list_intron_pos then 
+				f_out = options[:path_to_output] + "-taxonomy-intron-numbers.txt"
+				write_verbosely_output_to_file(f_out, output2)
+			end
+
 			true
 		end
 
@@ -431,6 +429,7 @@ if options[:output_format_list].include?("tree") then
 			log_fail_in_writing_output( f_out_phb, "taxonomy is missing")
 		end
 	end
+
 end
 
 puts " done."

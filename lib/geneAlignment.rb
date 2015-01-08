@@ -59,6 +59,7 @@ class GeneAlignment
 		@reduced_aligned_genestructures, @reduced_additional_structures = reduce_exon_intron_pattern() # reduce gene structures to "needed" parts 
 
 		@n_structures = calc_n_structures
+
 	rescue NoMethodError, TypeError, NameError, ArgumentError, Errno::ENOENT => exp
     	Helper.log_error "initialize gene alignment", exp
     	Helper.abort "Cannot create gene alignment."
@@ -680,12 +681,13 @@ class GeneAlignment
 
 		return output1, output2
 
-    # rescue NoMethodError, TypeError, NameError, ArgumentError, Errno::ENOENT => exp
-    # 	Helper.log_error "export_as_pdb", exp
-    # 	throw(:error)		
+    rescue NoMethodError, TypeError, NameError, ArgumentError, Errno::ENOENT => exp
+    	Helper.log_error "export_as_pdb", exp
+    	throw(:error)		
 	end
 
-	def export_as_tree
+	# creates tree in newick format, and (optional) list with intron positions per node
+	def export_as_tree(options)
 
 		# init vars for annotating the tree
 		taxa_with_alternative_names = {} # final annotation
@@ -741,8 +743,8 @@ class GeneAlignment
 
 				nodes_without_intron = tree_obj.find_nodes_without_intronposition(taxon, leaves_with_intron)
 
-				update_gain(taxa_with_gain_loss, taxon)
-				update_losses(taxa_with_gain_loss, nodes_without_intron)
+				update_gain(taxa_with_gain_loss, taxon, intronpos)
+				update_losses(taxa_with_gain_loss, nodes_without_intron, intronpos)
 			end
 		end
 
@@ -752,7 +754,8 @@ class GeneAlignment
 		# special features:
 		# - nodes without any gain or loss get 0/0 counts
 		# - nodes with 0 gains due to the removal of intron positions: 0 gain is replaced by "-"
-		tree_obj.get_all_nodes.each do |node|
+		nodes_in_tree = tree_obj.get_all_nodes
+		nodes_in_tree.each do |node|
 			if tree_obj.is_leaf?(node) && all_taxa_with_statistics[node] then 
 				taxa_with_alternative_names[node] = prettify_statisics( all_taxa_with_statistics, node)
 			end
@@ -779,8 +782,14 @@ class GeneAlignment
 				taxa_with_alternative_names[node] = prettify_gain_loss( data, node, is_display_zero_gain )
 			end
 		end
-		output = tree_obj.export_tree(taxa_with_alternative_names)
-		return output
+
+		output1 = tree_obj.export_tree(taxa_with_alternative_names)
+		if options[:is_list_intron_pos] then 
+			output2 = prettify_intron_pos_per_node(all_lineages, nodes_in_tree, taxa_with_gain_loss)
+		else
+			output2 = ""
+		end
+		return output1, output2
 
     rescue NoMethodError, TypeError, NameError, ArgumentError, Errno::ENOENT => exp
     	Helper.log_error "export_as_tree", exp
@@ -829,20 +838,22 @@ class GeneAlignment
 		Helper.sanitize_taxon_name(key) + ".#" + data[:species].size.to_s + ".#" + data[:genes].size.to_s + ".#" + data[:intronpos].size.to_s
 	end
 	def init_gain_loss
-		{gain: 0, loss: 0}
+		{gain: 0, loss: 0, gained_pos: [], lost_pos: []}
 	end
-	def update_gain(statistics, key)
+	def update_gain(statistics, key, pos)
 		if ! statistics[key] then 
 			statistics[key] = init_gain_loss
 		end
 		statistics[key][:gain] += 1
+		statistics[key][:gained_pos].push pos
 	end
-	def update_losses(statistics, keys)
+	def update_losses(statistics, keys, pos)
 		keys.each do |key|
 			if ! statistics[key] then 
 				statistics[key] = init_gain_loss
 			end
 			statistics[key][:loss] += 1
+			statistics[key][:lost_pos].push pos
 		end
 	end
 	def prettify_gain_loss(data, key, is_display_zero_gain)
@@ -856,6 +867,66 @@ class GeneAlignment
 		end
 		gain + "green_" + data[:loss].to_s + "red"
 	end
+	def prettify_intron_pos_per_node(lineages, nodes, nodes_with_statistics)
+		nodes_with_pos = {} # value: list of gained intron pos and list of all intron pos
+		intronpos_with_numbers = {} #key: intron pos, value: occurrence number
+		output = []
+
+		# prepare intron number, since this and not position in alignment will be used for output
+		sorted_intron_positions = @stats_per_intron_pos.keys.sort
+		sorted_intron_positions.each_with_index do |intronpos, intron_number|
+			intronpos_with_numbers[intronpos] = intron_number
+		end
+
+		lineages.each do |lineage|
+			nodes_in_lineage = lineage & nodes # keep original order of lineage
+			processed_nodes = nodes_with_pos.keys
+			intron_pos_gained_in_lineage_so_far = [] 
+			if nodes_in_lineage.is_subset?(processed_nodes) then
+				# nothing to do, intron numbers known for all nodes
+				next
+			end
+
+			nodes_in_lineage.each do |node|
+				nodes_with_pos[node] = { all: [], gained: [] }
+
+				if this_stats = nodes_with_statistics[node] then 
+
+					# something gained or lost at this node
+					if gained_pos = this_stats[:gained_pos] then 					
+						intron_pos_gained_in_lineage_so_far = intron_pos_gained_in_lineage_so_far + gained_pos
+						nodes_with_pos[node][:gained] = gained_pos
+					end
+
+					# all introns present at this node, account for possible loss!
+					if lost_pos = this_stats[:lost_pos] then
+						intron_pos_gained_in_lineage_so_far = intron_pos_gained_in_lineage_so_far - lost_pos
+					end
+					nodes_with_pos[node][:all] = intron_pos_gained_in_lineage_so_far
+				else
+
+					# nothing gained or lost at this node
+					nodes_with_pos[node][:gained] = []
+					nodes_with_pos[node][:all] = intron_pos_gained_in_lineage_so_far
+				end
+			end
+
+			# break execution as soon as possible
+			break if processed_nodes == nodes
+		end
+
+		# prepare data for output
+		nodes.each_with_index do |node, ind|
+			data = nodes_with_pos[node]
+			# map intron pos to intron number
+			gained = data[:gained].map{|ele| intronpos_with_numbers[ele]}
+			all = data[:all].map{|ele| intronpos_with_numbers[ele]}
+			output[ind] = "\"#{node}\"" + ":" + gained.sort.join(",") + ":" + all.sort.join(",")
+		end
+
+		return output.join("\n")
+	end
+
 	# --- end helper methods for export_as_tree
 
 
@@ -899,35 +970,6 @@ class GeneAlignment
     rescue NoMethodError, TypeError, NameError, ArgumentError, Errno::ENOENT => exp
     	Helper.log_error "export_as_taxonomy", exp
     	throw(:error)	
-	end
-
-	# this method is for genepainter webserver only
-	# it generates a list of intron numbers that occur first in each taxon
-	def export_as_taxonomy_list_of_intron_positions_per_taxon_only
-		taxon_first_found_with_intron_numbers = {}
-		
-		sorted_intron_positions = @stats_per_intron_pos.keys.sort
-		sorted_intron_positions.each_with_index do |intronpos, intron_number|
-			introninfo = @stats_per_intron_pos[intronpos]
-			if taxon = introninfo[:taxon_first_found] then 
-				if ! taxon_first_found_with_intron_numbers[taxon] then 
-					taxon_first_found_with_intron_numbers[taxon] = []
-				end
-				taxon_first_found_with_intron_numbers[taxon].push intron_number
-			end
-		end
-		throw :no_taxonomy if taxon_first_found_with_intron_numbers.empty?
-		
-		output = Array.new(taxon_first_found_with_intron_numbers.size) 
-		taxon_first_found_with_intron_numbers.keys.each_with_index do |taxon, ind|
-			intron_numbers = taxon_first_found_with_intron_numbers[taxon]
-			output[ind] = "#{taxon}:#{intron_numbers.join(",")}"
-		end
-		return output.join("\n")
-
-    rescue NoMethodError, TypeError, NameError, ArgumentError, Errno::ENOENT => exp
-    	Helper.log_error "export_as_taxonomy", exp
-    	throw(:error)			
 	end
 
 	# information about every intron position
