@@ -325,18 +325,22 @@ def render_svg(tree, fontsize=12, spacing=2, textwidth=100,
         node('circle', cx=(x+w)*sx, cy=y*sy, r=2, fill="black")
         if not text: continue
         m = re.match('(.*)_([0-9\-]+)([^_]+)?_([0-9\-]+)([^_]+)?$', text)
+        cl = 'taxon'
         if m:
             text, v1, c1, v2, c2 = m.groups()
             c1 = c1 or 'black'
             c2 = c2 or 'black'
             node('text', v2, x=(x+w)*sx-3, y=y*sy+smallfont-1, text_anchor="end", style=branchlabel, fill=c2)
             node('text', v1, x=(x+w)*sx-3-len(v2)*smallfont, y=y*sy+smallfont-1, text_anchor="end", style=branchlabel, fill=c1)
-            
+            if c1 == 'green' and v1 != '0':
+                cl = cl+' taxon-intron-gain'
+            else:
+                cl = 'taxon'   
         if isleaf:
-            node('text', text.replace('.', ' '), x=(x+w)*sx + 4, y=y*sy+fontsize/3, style=leaflabel, _class="taxon")
+            node('text', text.replace('.', ' '), x=(x+w)*sx + 4, y=y*sy+fontsize/3, style=leaflabel, _class=cl)
         elif text:
             node('text', text, x=(x+w)*sx-3, y=y*sy-3,
-                     text_anchor="end", style=branchlabel, _class="taxon")
+                     text_anchor="end", style=branchlabel, _class=cl)
 
     svg.append('</g></svg>')
     return '\n'.join(svg)
