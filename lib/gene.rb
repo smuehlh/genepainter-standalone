@@ -250,8 +250,7 @@ class Gene
 		@aligned_seq = aligned_seq_within_range
 		@exons = exons_within_range
 		@introns = introns_within_range
-puts "#{range_start}-#{range_end}"
-puts @aligned_seq
+
 		if @aligned_seq.empty? ||
 			@exons.empty? then  
 			# every gene should have still min. 1 exon
