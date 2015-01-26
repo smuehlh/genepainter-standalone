@@ -9,6 +9,11 @@ otein multiple sequence alignments (MSA). Gene structures, as provided by WebSci
 formats, ranging from plain text to graphical output formats.
 
 
+Restrictions and Licence
+------------------------
+GenePainter can be used under a GNU General Public License.
+
+
 INSTALLATION
 ------------
 
