@@ -987,11 +987,11 @@ class GeneAlignment
 		# second part of output
 		sorted_intron_positions = @stats_per_intron_pos.keys.sort
 		info_per_intronpos = Array.new( @stats_per_intron_pos.size + 1 ) # +1 for header
-		info_per_intronpos[0] = "Intron\t# Introns"
+		info_per_intronpos[0] = "Intron\t# Genes"
 		# does any intron have a last common ancestor?
 		is_add_tax_info = @stats_per_intron_pos.collect{|k, v| v[:taxon_first_found]}.compact.any?
 		if is_add_tax_info then 
-			info_per_intronpos[0] += "\tLast common ancestor\tFirst unique ancestor (# Introns)"
+			info_per_intronpos[0] += "\tLast Common Ancestor (LCA)\tDescendants of LCA (# Introns)"
 		end
 		sorted_intron_positions.each_with_index do |intronpos, intron_number|
 			index_output_array = intron_number + 1
