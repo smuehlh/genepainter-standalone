@@ -40,17 +40,31 @@ class YamlToGene
 			exon_start_cdna = last_exon_end_cdna
 			exon_end_cdna = exon_start_cdna + (stop_pos - start_pos) # start + length
 
-
 			undetermined_pos = exon["undeterminedlist"]
+			inframe_stop_pos = exon["inframe_stopcodons"]
+
 			exon["seqshifts"].each do |seqshift|
-				additonal_target_seq = (seqshift["dna_end"]-seqshift["dna_start"]).abs 
+			
+				additional_target_seq = (seqshift["dna_end"]-seqshift["dna_start"]).abs 
+
 				if ( seqshift["nucl_start"] == seqshift["nucl_end"] && 
-						! is_phase_2(additonal_target_seq) &&
-						! undetermined_pos.include?(seqshift["prot_start"])	
+						! is_phase_2(additional_target_seq) &&
+						! undetermined_pos.include?(seqshift["prot_start"]) && 
+						( seqshift["prot_start"] != seqshift["prot_end"] ||	
+							inframe_stop_pos.include?(seqshift["prot_start"])
+						)
 					) || 
-					( seqshift["nucl_start"] != seqshift["nucl_end"] && is_phase_1(additonal_target_seq) ) then
-					exon_end_cdna += fill_up_codons(additonal_target_seq)
-				
+					( seqshift["nucl_start"] != seqshift["nucl_end"] && is_phase_1(additional_target_seq) ) then
+					# genomic dna contains stop codon, that is not translated or a sequence shift.
+					exon_end_cdna += fill_up_codons(additional_target_seq)
+				end
+
+				if (seqshift["nucl_start"] < seqshift["nucl_end"] &&
+						seqshift["dna_start"] == seqshift["dna_end"]
+				) then 
+					# genomic dna contains additional bases, that are not translated.
+					superfluous_target_seq = (exon["seqshifts"][0]["nucl_start"] - exon["seqshifts"][0]["nucl_end"]).abs
+					exon_end_cdna -= superfluous_target_seq
 				end
 
 			end
