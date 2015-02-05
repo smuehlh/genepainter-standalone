@@ -46,7 +46,8 @@ class YamlToGene
 			exon["seqshifts"].each do |seqshift|
 			
 				additional_target_seq = (seqshift["dna_end"]-seqshift["dna_start"]).abs 
-
+				# when altering these conditions, please verify inframe-stopcodons and sequenceshifts are still recognized.
+				# test with e.g. OtgMhc15 and TnMyo1Ea
 				if ( seqshift["nucl_start"] == seqshift["nucl_end"] && 
 						! is_phase_2(additional_target_seq) &&
 						! undetermined_pos.include?(seqshift["prot_start"]) && 
