@@ -30,21 +30,51 @@ class YamlToGene
 		# a gene object needs exons and introns (and the aligned sequence, which is added somewhere else)
 
 		# method exons_original returns only exons, no alternative transkripts
+		last_exon_end_cdna = 0 # end position of last exon in cdna seq ; cdna pos of first exon should be 0
+		last_exon_end_gene = 0 # end position in gene (as reported in yaml) of last exon
+
+		# # method exons_original returns only exons, no alternative transkripts
 		exons_original.each do |exon|
-			exon_obj = Exon.new(exon["nucl_start"], exon["nucl_end"])
-			@gene.exons << exon_obj
+			start_pos, stop_pos = exon["nucl_start"], exon["nucl_end"]
+
+			exon_start_cdna = last_exon_end_cdna
+			exon_end_cdna = exon_start_cdna + (stop_pos - start_pos) # start + length
+
+
+			undetermined_pos = exon["undeterminedlist"]
+			exon["seqshifts"].each do |seqshift|
+				additonal_target_seq = (seqshift["dna_end"]-seqshift["dna_start"]).abs 
+				if ( seqshift["nucl_start"] == seqshift["nucl_end"] && 
+						! is_phase_2(additonal_target_seq) &&
+						! undetermined_pos.include?(seqshift["prot_start"])	
+					) || 
+					( seqshift["nucl_start"] != seqshift["nucl_end"] && is_phase_1(additonal_target_seq) ) then
+					exon_end_cdna += fill_up_codons(additonal_target_seq)
+				
+				end
+
+			end
+
+			exon_obj = Exon.new(exon_start_cdna, exon_end_cdna)
+			@gene.exons.push(exon_obj)
+
+			if last_exon_end_cdna != 0 then
+				# not the very first exon => this exon has a preceeding intron
+
+				intron_length = intron_seq_by_intronnumber(exon["number"]).size
+				pos, phase = intron_phase_and_position_in_dna(last_exon_end_cdna) # last nt before intron	
+
+				intron_obj = Intron.new(last_exon_end_cdna, # last nt before intron
+					intron_length, # intron length
+					phase # phase
+					)
+				@gene.introns.push(intron_obj)
+
+			end
+			last_exon_end_cdna = exon_end_cdna
+			last_exon_end_gene = stop_pos
 		end
 
-		# method "introns" returns all (complete) introns and all uncertain introns!
-		introns.each do |intron|
-			pos, phase = intron_phase_and_position_in_dna(intron["nucl_start"])
-			# pos, phase = intron_phase_and_position_in_protein(intron["nucl_start"])
-			intron_obj = Intron.new(pos,
-				intron["seq"].size, # length of intron
-				phase # intron phase
-				)
-			@gene.introns << intron_obj
-		end
 		return @gene
 	end
 
@@ -75,6 +105,33 @@ class YamlToGene
 
 		return pos, phase
 	end
+	
+	def intron_seq_by_intronnumber(num)
+		# method "introns" returns all (complete) introns and all uncertain introns!
+		introns.each do |intron|
+			if intron["number"] == num then 
+				return intron["seq"]
+			end
+		end
+	end
+	def fill_up_codons(num)
+		if is_phase_1(num) then 
+			num += 2
+		elsif is_phase_2(num)
+			num += 1
+		end
+		# phase 3 : nothing to do, already a valid codon
+		return num
+	end
+	def is_phase_1(num)
+		n_codons = num / 3
+		return n_codons * 3 + 1 == num
+	end
+	def is_phase_2(num)
+		n_codons = num / 3
+		return n_codons * 3 + 2 == num 
+	end
+
 
 	### methods from webscipio
 
