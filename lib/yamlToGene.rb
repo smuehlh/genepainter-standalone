@@ -5,6 +5,7 @@ class YamlToGene
 		@gene = Gene.new(name) # gene object referring to all exon and intron objects
 		@contigs = YAML.load( data ) # raw_data, which are different contigs
 		ensure_contigs_format
+		ensure_exon_intron_numbers
 	end
 
 	# expect @contig to be an array containg the gene structure
@@ -26,25 +27,39 @@ class YamlToGene
 		end
 	end
 
+	def ensure_exon_intron_numbers
+		exon_number = 0
+		matchings.each do |match|
+			if match["type"] == "exon" then
+				if ! match.has_key?("number") then 
+					exon_number += 1
+					match["number"] = exon_number.to_i
+				end
+			elsif match["type"] == "intron" ||  match["type"] == "intron?" then
+				if ! match.has_key?("number") then 
+					match["number"] = exon_number.to_i
+				end
+			end
+		end
+	end
+
 	def to_gene
 		# a gene object needs exons and introns (and the aligned sequence, which is added somewhere else)
 
-		# method exons_original returns only exons, no alternative transkripts
-		last_exon_end_cdna = 0 # end position of last exon in cdna seq ; cdna pos of first exon should be 0
-		last_exon_end_gene = 0 # end position in gene (as reported in yaml) of last exon
+		exon_offset_due_to_seqshifts = 0 # offset due to seqshifts etc.
 
-		# # method exons_original returns only exons, no alternative transkripts
+		# method exons_original returns only exons, no alternative transkripts
 		exons_original.each do |exon|
 			start_pos, stop_pos = exon["nucl_start"], exon["nucl_end"]
 
-			exon_start_cdna = last_exon_end_cdna
+			exon_start_cdna = start_pos + exon_offset_due_to_seqshifts
 			exon_end_cdna = exon_start_cdna + (stop_pos - start_pos) # start + length
 
 			undetermined_pos = exon["undeterminedlist"]
 			inframe_stop_pos = exon["inframe_stopcodons"]
-
+	
 			exon["seqshifts"].each do |seqshift|
-			
+	
 				additional_target_seq = (seqshift["dna_end"]-seqshift["dna_start"]).abs 
 				# when altering these conditions, please verify inframe-stopcodons and sequenceshifts are still recognized.
 				# test with e.g. OtgMhc15 and TnMyo1Ea
@@ -57,7 +72,10 @@ class YamlToGene
 					) || 
 					( seqshift["nucl_start"] != seqshift["nucl_end"] && is_phase_1(additional_target_seq) ) then
 					# genomic dna contains stop codon, that is not translated or a sequence shift.
-					exon_end_cdna += fill_up_codons(additional_target_seq)
+					missing_target_seq = fill_up_codons(additional_target_seq)
+					exon_end_cdna += missing_target_seq
+
+					exon_offset_due_to_seqshifts += missing_target_seq
 				end
 
 				if (seqshift["nucl_start"] < seqshift["nucl_end"] &&
@@ -66,6 +84,8 @@ class YamlToGene
 					# genomic dna contains additional bases, that are not translated.
 					superfluous_target_seq = (exon["seqshifts"][0]["nucl_start"] - exon["seqshifts"][0]["nucl_end"]).abs
 					exon_end_cdna -= superfluous_target_seq
+
+					exon_offset_due_to_seqshifts -= superfluous_target_seq
 				end
 
 			end
@@ -73,21 +93,19 @@ class YamlToGene
 			exon_obj = Exon.new(exon_start_cdna, exon_end_cdna)
 			@gene.exons.push(exon_obj)
 
-			if last_exon_end_cdna != 0 then
-				# not the very first exon => this exon has a preceeding intron
+			intron = intron_by_intronnumber(exon["number"])
+			# due to webscipio "Gap", intron might not exist
+			if ! intron.nil? then  
+			
+				intron_length = intron["seq"].size
+				pos, phase = intron_phase_and_position_in_dna(exon_end_cdna) # last nt before intron	
 
-				intron_length = intron_seq_by_intronnumber(exon["number"]).size
-				pos, phase = intron_phase_and_position_in_dna(last_exon_end_cdna) # last nt before intron	
-
-				intron_obj = Intron.new(last_exon_end_cdna, # last nt before intron
+				intron_obj = Intron.new(exon_end_cdna, # last nt before intron
 					intron_length, # intron length
 					phase # phase
 					)
 				@gene.introns.push(intron_obj)
-
 			end
-			last_exon_end_cdna = exon_end_cdna
-			last_exon_end_gene = stop_pos
 		end
 
 		return @gene
@@ -121,13 +139,15 @@ class YamlToGene
 		return pos, phase
 	end
 	
-	def intron_seq_by_intronnumber(num)
+	def intron_by_intronnumber(num)
 		# method "introns" returns all (complete) introns and all uncertain introns!
 		introns.each do |intron|
 			if intron["number"] == num then 
-				return intron["seq"]
+				return intron
 			end
 		end
+		# no intron with corresponding number found
+		return nil
 	end
 	def fill_up_codons(num)
 		if is_phase_1(num) then 
