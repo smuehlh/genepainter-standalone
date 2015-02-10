@@ -263,12 +263,16 @@ class GeneAlignment
 	def reduce_exon_intron_pattern(opts={})
 		is_del_all_common_gaps = opts[:del_all_common_gaps] || false
 		is_sep_introns = opts[:sep_introns_in_plaintext_output] || @is_separate_introns_in_textbased_output
+		is_split_intron_phases_onto_different_rows = true
+		is_split_intron_phases_onto_different_rows = false if opts[:no_sep_introns_phases]
+
 		input_array = opts[:input] || [ @aligned_genestructures,@additional_structures ]
 
 		all_patterns = Sequence.remove_common_gaps(
 			input_array.flatten,
 			{delete_all_common_gaps: is_del_all_common_gaps,
 			ensure_common_gap_between_consecutive_non_gaps: is_sep_introns,
+			intron_pattern: is_split_intron_phases_onto_different_rows,
 			gap_symbol: @exon_placeholder} # use placeholder as gap-symbol
 			)
 
@@ -442,27 +446,25 @@ class GeneAlignment
 	# 2) list of all positions that will be merged
 	# 3) fuzzy pattern with all fuzzy introns merged to one position
 	def export_as_plain_text_with_fuzzy_intron_pos(exon_placeholder_output, intron_placeholder_output, window_size)
-
 		sorted_intron_positions = @stats_per_intron_pos.keys.sort
-		matched_fuzzy_positions = {} # key: original position, value: mapped position
 		fuzzy_intron_placeholder_output = "*"
 
-		# init 'results' variables
+		# init results variables
+		old_and_new_pos_of_fuzzy_introns = {} # key: original position, value: mapped position, coordinates based on reduced pattern
+		unfuzzy_pattern_with_fuzzy_marked = @reduced_aligned_genestructures.map {|ele| ele.dup}
+		fuzzy_pattern = @reduced_aligned_genestructures.map {|ele| ele.dup}
+
+		# init output variables
 		output = [
 			["Original exon-intron pattern, fuzzy introns (window size #{window_size}) marked by #{fuzzy_intron_placeholder_output}"],
 			["\n", "List of fuzzy introns"],
 			["\n", "Exon-intron pattern with fuzzy introns written at same place"]
-		] # contains unfuzzy pattern with fuzzy introns marked, fuzzy_pattern and info
-		unfuzzy_pattern_with_fuzzy_marked = @aligned_genestructures.map do |ele| 
-			replace_exon_intron_placeholders_in_structure(
-				ele.dup,
-				exon_placeholder_output,
-				intron_placeholder_output
-			)
-		end
-		fuzzy_pattern = unfuzzy_pattern_with_fuzzy_marked.map {|ele| ele.dup}
-		info_per_intronpos = [ "Intron position\tMapped intron positions" ]
+		] # contains unfuzzy pattern with fuzzy introns marked, info and fuzzy_pattern
+		info_per_fuzzy_pos = [ "Intron position\tMapped intron positions" ]
+		new_old_intron_numbers_of_fuzzy_introns = {} # key: mapped pos(new pos), value: orginal pos, coordinates base on intron number
 
+		# 1) find fuzzy positions and mark them in the reduced pattern
+		# 2) merge fuzzy positions
 		sorted_intron_positions.each_cons(2) do |pos1, pos2|
 
 			if Intron.are_introns_within_range(pos1, pos2, window_size) then
@@ -472,64 +474,94 @@ class GeneAlignment
 				# intronpositions that occur in the same gene are not fuzzy!
 				genes_common_to_pos1_and_pos2 = @stats_per_intron_pos[pos1][:genes] & @stats_per_intron_pos[pos2][:genes]
 
-				if map_intron_onto_pos = matched_fuzzy_positions[pos1] then 
-					matched_fuzzy_positions[pos1] = map_intron_onto_pos
-					matched_fuzzy_positions[pos2] = map_intron_onto_pos
+				ind_intron_pos1 = sorted_intron_positions.index(pos1)
+				ind_intron_pos2 = sorted_intron_positions.index(pos2)
+				ind_pattern_pos1 = Sequence.find_index_of_intron_pos(@reduced_aligned_genestructures, ind_intron_pos1)
+				ind_pattern_pos2 = Sequence.find_index_of_intron_pos(@reduced_aligned_genestructures, ind_intron_pos2)
+	
+				# save mapping of pattern-positions (for fuzzy patterns)
+				if old_and_new_pos_of_fuzzy_introns[ind_pattern_pos1] then 
+					# pos1 was already mapped onto an other position: map pos1 and pos2 to that former mapping destination
+					old_and_new_pos_of_fuzzy_introns[ind_pattern_pos1] = old_and_new_pos_of_fuzzy_introns[ind_pattern_pos1] # map pos1 onto former mapping dest
+					old_and_new_pos_of_fuzzy_introns[ind_pattern_pos2] = old_and_new_pos_of_fuzzy_introns[ind_pattern_pos1] # map pos2 onto former mapping dest
 				else
-					map_intron_onto_pos = pos1
-					matched_fuzzy_positions[pos2] = pos1
+					# map pos2 onto pos1
+					old_and_new_pos_of_fuzzy_introns[ind_pattern_pos2] = ind_pattern_pos1
+				end
+
+				# save mapping of intron-positions (for mapping table)					
+				if new_old_intron_numbers_of_fuzzy_introns.values.flatten.include?(ind_intron_pos1) then 	
+
+					key = nil 	
+					new_old_intron_numbers_of_fuzzy_introns.each do |k, v|
+						if v.include?( ind_intron_pos1 ) then 
+							key = k
+							break
+						end
+					end
+					new_old_intron_numbers_of_fuzzy_introns[key].push ind_intron_pos2
+				else
+					new_old_intron_numbers_of_fuzzy_introns[ind_intron_pos1] = [ind_intron_pos2]
 				end
 
 				(@stats_per_intron_pos[pos1][:genes] - genes_common_to_pos1_and_pos2).each do |gene_name|
-					ind = @names_aligned_genestructures.index(gene_name)
-					next if ! ind # gene does not belong to output
+					ind_struct = @names_aligned_genestructures.index(gene_name)
+					next if ! ind_struct # gene does not belong to output
 
-					unfuzzy_pattern_with_fuzzy_marked[ind][pos1] = fuzzy_intron_placeholder_output
-					if map_intron_onto_pos != pos1 then 
-						fuzzy_pattern[ind][pos1] = exon_placeholder_output
-						fuzzy_pattern[ind][map_intron_onto_pos] = intron_placeholder_output
+					unfuzzy_pattern_with_fuzzy_marked[ind_struct][ind_pattern_pos1] = fuzzy_intron_placeholder_output
+
+					if new_ind = old_and_new_pos_of_fuzzy_introns[ind_pattern_pos1] then 
+						# map pos1 onto differnt position
+						fuzzy_pattern[ind_struct][ind_pattern_pos1] = exon_placeholder_output
+						fuzzy_pattern[ind_struct][new_ind] = intron_placeholder_output
 					end
 				end
 
 				(@stats_per_intron_pos[pos2][:genes] - genes_common_to_pos1_and_pos2).each do |gene_name|
-					ind = @names_aligned_genestructures.index(gene_name)
-					next if ! ind # gene does not belong to output
+					ind_struct = @names_aligned_genestructures.index(gene_name)
+					next if ! ind_struct # gene does not belong to output
 
-					unfuzzy_pattern_with_fuzzy_marked[ind][pos2] = fuzzy_intron_placeholder_output
-					fuzzy_pattern[ind][pos2] = exon_placeholder_output
-					fuzzy_pattern[ind][map_intron_onto_pos] = intron_placeholder_output
+					unfuzzy_pattern_with_fuzzy_marked[ind_struct][ind_pattern_pos2] = fuzzy_intron_placeholder_output
+
+					# map pos2 onto different position
+					new_ind = old_and_new_pos_of_fuzzy_introns[ind_pattern_pos2]
+					fuzzy_pattern[ind_struct][ind_pattern_pos2] = exon_placeholder_output
+					fuzzy_pattern[ind_struct][new_ind] = intron_placeholder_output
 				end
 			else
 				# no fuzzy intron
 			end
-
 		end
 
-		# reduce generated patterns
+		# 3) map gene names, intron numbers and merged pattern onto unfuzzy pattern with fuzzy marked
 		reduced_unfuzzy_pattern_with_legend = exon_intron_pattern_with_merged_pattern_spaces_and_intron_numbers(
-			unfuzzy_pattern_with_fuzzy_marked, exon_placeholder_output, intron_placeholder_output)
-		reduced_fuzzy_pattern = reduce_exon_intron_pattern( {input: fuzzy_pattern} ).first # first output is pattern itself
-
+			unfuzzy_pattern_with_fuzzy_marked, exon_placeholder_output, intron_placeholder_output
+		)
+		# 4) map gene names onto fuzzy pattern, replace exon/ and intron placeholders by those for output
+		reduced_fuzzy_pattern = reduce_exon_intron_pattern( {input: fuzzy_pattern, no_sep_introns_phases: true} ).first # first output is actual reduced pattern
 		# add gene names to fuzzy pattern
 		reduced_fuzzy_pattern.each_with_index do |struct, ind|
 			name = @names_aligned_genestructures[ind]
 
 			name = convert_string_to_chopped_fasta_header ( name )
+			struct = replace_exon_intron_placeholders_in_structure( struct, exon_placeholder_output, intron_placeholder_output )
+
 			reduced_fuzzy_pattern[ind] = [name, struct].join("")
 		end
 
-		# generate info which introns are fuzzy
-		matched_fuzzy_positions.values.sort.uniq.each do |mapped_pos|
-			original_positions = matched_fuzzy_positions.select{|k,v| v==mapped_pos}.keys
+		# 5) convert mapping-info to human readable table
+		mapped_onto_sorted = new_old_intron_numbers_of_fuzzy_introns.keys.sort
+		mapped_onto_sorted.each do |mapped_onto|
+			mapped = new_old_intron_numbers_of_fuzzy_introns[mapped_onto]
 
-			ind_mapped_intron_pos = Helper.ruby2human_counting( sorted_intron_positions.index(mapped_pos) ) # start count with 1 !
-			ind_original_positions = original_positions.collect {|pos| Helper.ruby2human_counting( sorted_intron_positions.index(pos) ) }
-			info_per_intronpos.push( "#{ind_mapped_intron_pos}\t#{ind_original_positions.join(", ")}" )
-		end
+			mapped_onto_human_counting = Helper.ruby2human_counting(mapped_onto)
+			mapped_human_counting = mapped.collect {|pos| Helper.ruby2human_counting(pos)}
+			info_per_fuzzy_pos.push "#{mapped_onto_human_counting}\t#{mapped_human_counting.join(", ")}"
+		end 
 
-		# add legend with intron numbers to unfuzzy pattern and this pattern to output
+		# output everything
 		output[0] << reduced_unfuzzy_pattern_with_legend.join("\n")
-		output[1] << info_per_intronpos.join("\n")
+		output[1] << info_per_fuzzy_pos.join("\n")
 		output[2] << reduced_fuzzy_pattern.join("\n")
 
 		return output.join("\n")

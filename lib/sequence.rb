@@ -140,6 +140,7 @@ module Sequence
 	def remove_common_gaps_in_alignment_update_predefined_ranges(seqs, range)
 		reduced_seqs, deleted_pos = remove_common_gaps(seqs, 
 			{
+				intron_pattern: false, # its an protein alignment, no exon-intron pattern
 				delete_all_common_gaps: true, # remove all common gaps
 				return_deleted_cols: true # return indices of columns that were deleted
 			}
@@ -164,6 +165,8 @@ module Sequence
 	# opts [Hash]: options, each has a default value
 	# 			key gap_symbol [String]: symbol treated as common gap. Must have length 1, default: "-"
 	# 			key start_col [Integer]: First column to be searched for common gaps, default: 0
+	# 			key intron_pattern [Boolean]: treat input as intron_pattern, 
+	# 											i.e. different non-gap symbols in same row are distributed onto several rows, default: true
 	# 			key delete_all_common_gaps [Boolean]: delete all common gaps or keep one of each consecutive common gaps, default: false
 	# 			key ensure_common_gap_between_consecutive_non_gaps [Boolean]: always have one common gap between two non-gaps, default: true
 	# 																			only applicable in combination with delete_all_common_gaps == false
@@ -175,6 +178,13 @@ module Sequence
 		is_delete_all_common_gaps = false # default: keep one common gap of consecutive ones
 		is_always_common_gap_between_two_non_gaps = nil # this option becomes only active when is_delete_all_common_gaps = false
 		is_return_deleted_pos = false # this option becomes only active when is_delete_all_common_gaps = true
+		if opts[:intron_pattern].nil? then 
+			# split rows with different intron phases into different rows
+			is_intron_pattern = true
+		else
+			# _not_ split rows with intron phases into different rows
+			is_intron_pattern = opts[:intron_pattern]
+		end
 		if opts[:delete_all_common_gaps] then 
 			is_delete_all_common_gaps = true
 			if opts.has_key?(:return_deleted_cols) &&
@@ -198,6 +208,8 @@ module Sequence
 		(last_col-1).downto(start_col) do |col|
 			content_this_col = reduced_seqs.collect { |seq| seq[col] }
 			is_only_gaps_this_col = is_array_of_common_gaps(content_this_col, gap_symbol)
+			intron_phases_this_col = intron_phases_in_array(content_this_col)
+			is_multiple_intron_phases_this_col = ! is_only_gaps_this_col && intron_phases_this_col.size > 1
 
 			if is_delete_all_common_gaps then 
 				# delete all columns of common gaps, no matter what
@@ -242,7 +254,39 @@ module Sequence
 					# set the col to keep to column preceeding (in the string) this one!
 					last_col_to_keep = col - 1 
 				end
-			end			
+			end	
+
+			if is_intron_pattern && is_multiple_intron_phases_this_col then 
+				# column contains different intron phases
+				# separate different intron phases onto different columns
+				# insert new columns behind this one
+
+				# intron_phases_this_col are sorted by intron phase (= numerically sorted)
+				n_intron_phases = intron_phases_this_col.size
+				if is_delete_all_common_gaps then 
+					# split introns onto different cols, no need to add common gap cols in between
+					separator = gap_symbol * n_intron_phases
+				else
+					# split introns onto different cols, add common gap cols in between
+					separator = gap_symbol * (n_intron_phases * 2 - 1) # -1: col for first intron already exists; *2 for common gaps col
+				end
+				reduced_seqs.each do |seq|
+					this_char = seq[col]
+					this_separator = separator.dup # preserve original separator
+					if this_char != gap_symbol then 
+						# insert actual intron phase in separator
+						ind_intron_phase = intron_phases_this_col.index(this_char)
+						if ! is_delete_all_common_gaps then 
+							ind_intron_phase *= 2 # account for common gap cols between each two non-gap cols
+						end
+						this_separator[ind_intron_phase] = this_char
+					end
+
+					# replace col by separator
+					seq[col] = this_separator
+				end
+			end
+
 		end
 		if ! is_delete_all_common_gaps then 
 			# reduce consecutive common gaps to one col
@@ -279,7 +323,28 @@ module Sequence
 		# true if uniq_ele contains only one element, which is gap_symbol
 		# false otherwise
 		return uniq_ele == [gap_symbol]
+	end
 
+	def intron_phases_in_array(arr)
+		# find all intron phases in array
+		return arr & ["0","1","2","?"]
+	end
+
+	# map position of intron onto reduced pattern
+	# do not use intron_col * 2 + 1, since reduced pattern might not always contain a common-gap col between two intron cols
+	def find_index_of_intron_pos(pattern, intron_col)
+		n_intron_cols_seen = 0
+		n_cols = pattern[0].size
+		0.upto(n_cols-1) do |col|
+			content_this_col = pattern.collect { |seq| seq[col] }
+			is_only_gaps_this_col = is_array_of_common_gaps(content_this_col)
+		
+			if ! is_only_gaps_this_col then 
+				return col if n_intron_cols_seen == intron_col
+
+				n_intron_cols_seen += 1
+			end
+		end
 	end
 
 	# check if there is at least one sequence without gap at this position

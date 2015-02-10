@@ -49,8 +49,15 @@ class Intron
 		
 		protein_pos = convert_dna_pos_into_protein_pos(@pos_last_nt_in_dna_seq_before_intron)
 
+		if @phase == "0" then 
+			# introns of phase 0 should go underneath the first amino acid of the next exon
+		else
+			# introns of phase 1/2 should go underneath the splitted amino acid;
+			# -1 to make it the _last amino acid
+			protein_pos = protein_pos - 1
+		end
 		@pos_last_aa_in_aligned_protein_before_intron = 
-			Sequence.sequence_pos2alignment_pos(protein_pos - 1, aligned_seq, is_pos_before_gap) # -1 to make it the _last_ amino acid 
+			Sequence.sequence_pos2alignment_pos(protein_pos, aligned_seq, is_pos_before_gap) 
 	end
 
 	def convert_dna_pos_into_protein_pos(pos)
