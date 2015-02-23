@@ -70,6 +70,10 @@ class Intron
 		return [@pos_last_aa_in_aligned_protein_before_intron, @phase]
 	end
 
+	def get_alignmentpos_merged_with_phase
+		return Intron.merge_position_and_phase( *get_alignmentpos_and_phase )
+	end
+
 
 	# fit gene into range
 	# input: n_del_nt: number of nucleotides deleted (in comparision to position of this intron)

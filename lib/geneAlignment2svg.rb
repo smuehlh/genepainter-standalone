@@ -122,20 +122,21 @@ class GeneAlignment2svg
 				intron = gene.introns[ind]
 				next if intron.nil? # there is no intron after the last exon
 				# offset: do not include this intron
-				intron_startpos_drawing = calc_pos_drawing( intron.pos_last_aa_in_aligned_protein_before_intron, "intron" ) 
+			
+				intron_startpos_drawing = calc_pos_drawing( intron.get_alignmentpos_merged_with_phase, "intron" ) 
 				if @is_default_color_scheme then 
 					intron_length = scale_down_intron_length( enlongate_intron_to_avoid_gaps( intron.n_nucleotides ) )
 					intron_color = svg_obj.colors[:intron]
 				else
 					intron_length = calc_intron_size_for_nondefault_color_scheme
-					intron_color = determine_intron_color( intron.pos_last_aa_in_aligned_protein_before_intron )
+					intron_color = determine_intron_color( intron.get_alignmentpos_merged_with_phase )
 				end
 
 				svg << svg_obj.draw_box(intron_startpos_drawing, intron_length, y_pos, intron_color)
 
 				# intron-gaps
 				# is there an longer intron at same position?
-				max_len_this_intron_pos = @all_intronpos_with_maxlength[ intron.pos_last_aa_in_aligned_protein_before_intron ]
+				max_len_this_intron_pos = @all_intronpos_with_maxlength[ intron.get_alignmentpos_merged_with_phase ]
 				if max_len_this_intron_pos > intron_length then 
 					gap_startpos_drawing = intron_startpos_drawing + intron_length
 					gap_length = enlongate_intron_to_avoid_gaps( max_len_this_intron_pos - intron_length )

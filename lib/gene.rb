@@ -302,7 +302,7 @@ class Gene
 
 	def get_all_introns_with_length(is_convert_to_nt_length=false)
 		@introns.collect do |intron|
-			[intron.pos_last_aa_in_aligned_protein_before_intron, intron.n_nucleotides]
+			[intron.get_alignmentpos_merged_with_phase, intron.n_nucleotides]
 		end
 	end
 
