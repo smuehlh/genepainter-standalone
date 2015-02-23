@@ -55,8 +55,8 @@ class YamlToGene
 			exon_start_cdna = start_pos + exon_offset_due_to_seqshifts
 			exon_end_cdna = exon_start_cdna + (stop_pos - start_pos) # start + length
 
-			undetermined_pos = exon["undeterminedlist"]
-			inframe_stop_pos = exon["inframe_stopcodons"]
+			undetermined_pos = exon["undeterminedlist"] || []
+			inframe_stop_pos = exon["inframe_stopcodons"] || []
 	
 			exon["seqshifts"].each do |seqshift|
 	
