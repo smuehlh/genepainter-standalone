@@ -69,7 +69,8 @@ class OptParser
 			end
 
 			opts.on("-p", "--path <path_to_genestructures>",
-				"Path to folder containing gene structures in YAML or GFF format") do |path|
+				"Path to folder containing gene structures in YAML or GFF format.",
+				"Required file extension is one of .yaml, .gff, .gff3") do |path|
 				options[:path_to_genestruct] = path
 				Helper.dir_exist_or_die(path)
 			end
