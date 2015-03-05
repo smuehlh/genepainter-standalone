@@ -50,7 +50,7 @@ puts  " done."
 
 ## genes
 gene_names = [] # a list of all gene names
-Dir.glob( File.join(options[:path_to_genestruct], "*.*") ) do |file|
+Dir.glob( File.join(options[:path_to_genestruct], "*.{yaml,gff3,gff}") ) do |file|
 	f_name = File.basename(file, ".*")
 	gene_names << f_name
 end
@@ -157,7 +157,7 @@ common_names.each_with_index do |gene_name, ind|
 	end
 
 	# find gene structure file with belongs to this gene
-	matching_files = Dir.glob( File.join(options[:path_to_genestruct], "#{gene_name}.*") ) 
+	matching_files = Dir.glob( File.join(options[:path_to_genestruct], "#{gene_name}.{yaml,gff,gff3}") ) 
 
 	# double-check that the gene was matched un-ambiguously to gene structure files
 	if matching_files.size > 1 then
@@ -174,7 +174,7 @@ common_names.each_with_index do |gene_name, ind|
 		# yaml format
 		data_obj = YamlToGene.new(data, gene_name)
 
-	elsif f_extension.casecmp(".gff") == 0 then
+	elsif f_extension.casecmp(".gff") == 0 || f_extension.casecmp(".gff3") == 0  then
 		# gff format
 		data_obj = GffToGene.new(data, gene_name)
 
