@@ -97,7 +97,12 @@ class GffToGene
 	end
 
 	def get_id_from_attributes(str)
-		str.match(/ID=(\w+);/)[1] || nil
+		match_data = str.match(/ID=([^;]+);/)
+		if match_data then 
+			return match_data[1]
+		else
+			return nil
+		end
 	end
 
 	# returns true, if parent_id is part of attributes list _or_ if parent_id is nil
