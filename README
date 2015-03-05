@@ -53,7 +53,7 @@ Usage: gene_painter.rb -i path_to_alignment -p path_to_genestructure_folder [opt
 Standard output format: Mark exons by '-' and introns by '|'
 
     -i, --input <path_to_alignment>  Path to fasta-formatted multiple sequence alignment
-    -p <path_to_genestructures>,     Path to folder containing gene structures in YAML or GFF format
+    -p <path_to_genestructures>,     Path to folder containing gene structures in YAML or GFF format. Required file extension: gff[3], yaml
         --path
 
 Options
