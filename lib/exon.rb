@@ -30,7 +30,8 @@ class Exon
 		# 3 nucleotides code for 1 amino acid
 
 		# CAUTION: this method does not translate into the position in the aligned sequence (there would be gaps also!)
-		(pos_in_dna/3.0).round
+		# TODO formerly: round
+		(pos_in_dna/3.0).floor
 	end
 
 
