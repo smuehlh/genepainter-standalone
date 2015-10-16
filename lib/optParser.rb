@@ -105,7 +105,7 @@ class OptParser
 					options[:output_format_list] << "txt_fuzzy"
 					options[:fuzzy_window] = n_bp
 				else
-					Helper.abort "Invalid argument: --fuzzy expects a number larger than 0"
+					Helper.warn "Ignoring argument: --fuzzy 0"
 				end
 			end
 			opts.on("--not-reduced", 
