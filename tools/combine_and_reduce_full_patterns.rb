@@ -1,6 +1,7 @@
 # !/usr/bin/env ruby
 
 require 'optparse'
+require 'ruby-debug' # FIXME
 require File.join(File.expand_path("..",File.dirname(__FILE__)), 'lib', 'sequence.rb')
 require File.join(File.expand_path("..",File.dirname(__FILE__)), 'lib', 'helper.rb')
 require File.join(File.expand_path("..",File.dirname(__FILE__)), 'lib', 'geneAlignment.rb')
@@ -139,6 +140,10 @@ def collect_exon_intron_patterns(file, is_special_patterns_only, special_pattern
 		uniq_name = generate_new_long_name(name, file)
 		new_name_with_pattern = [uniq_name, pattern].join()
 
+# only to trim phylo-input
+# if ! pattern.include?("|") then 
+# 	next
+# end
 		is_name_matches_special_pattern_names = false 
 		special_pattern_names.each do |sp_name|
 			if name.match(sp_name) then 
@@ -165,12 +170,13 @@ options[:input_files].each do |file|
  		file, options[:is_special_patterns_only], options[:special_pattern_names]
  		)
 end
-
 if @is_use_long_names then 
 	start_col = @long_name_lenght
 else
 	start_col = GeneAlignment.max_length_gene_name
 end
-reduced_patterns = Sequence.remove_common_gaps( all_exon_intron_patterns, {start_col: start_col} )
+
+# options to trim phylo-input: delete_all_common_gaps: true, intron_pattern: false
+reduced_patterns = Sequence.remove_common_gaps( all_exon_intron_patterns, {start_col: start_col, intron_pattern: true} )
 
 IO.write( options[:outfile], reduced_patterns.join("\n"), :mode => "w" )
