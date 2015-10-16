@@ -96,7 +96,7 @@ class GeneAlignment2svg
 			# draw text, crop text to maximal size
 			svg << svg_obj.print_text( crop_gene_names_for_svg(gene.name), y_pos )
 
-			# draw the background: artificially streches in exons to make the stay aligned
+			# draw the background: artificially streches in exons to make them stay aligned
 			background_col = svg_obj.colors[:exon_streched]
 			svg << svg_obj.draw_horizontal_line(0, x_pos_max, y_pos, {type: "exon_streched"})
 
@@ -128,7 +128,7 @@ class GeneAlignment2svg
 					intron_length = scale_down_intron_length( enlongate_intron_to_avoid_gaps( intron.n_nucleotides ) )
 					intron_color = svg_obj.colors[:intron]
 				else
-					intron_length = calc_intron_size_for_nondefault_color_scheme
+					intron_length = enlongate_intron_to_avoid_gaps( calc_intron_size_for_nondefault_color_scheme )
 					intron_color = determine_intron_color( intron.get_alignmentpos_merged_with_phase )
 				end
 
