@@ -64,7 +64,7 @@ module Helper
 
 		# write to log file which seqs and genes exactly are used
 		log ""
-		log "Using #{common.join(", ")} genes for computation."
+		log "Using genes #{common.join(", ")} for computation."
 
 	end
 
