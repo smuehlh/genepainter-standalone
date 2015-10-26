@@ -111,7 +111,7 @@ if species = options[:select_by][:species] then
 	end
 end
 if list = options[:select_by][:list] then
-	selection_criterium = "list #{list}" 
+	selection_criterium = "list #{list.join(", ")}" 
 	genes_selected_for_output = list & common_names
 	if (list - common_names).any? then 
 		missing = list - common_names

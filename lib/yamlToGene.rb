@@ -87,40 +87,7 @@ class YamlToGene
 			@gene.exons.push(exon_obj)
 
 			# nucleotides added for split codon have to be subtracted from next exon
-			exon_offset_due_to_splitcodon = phase
-
-# 		dnaseq_length = 0
-# 		# all exons, without alternative transcripts
-# 		exons_original.each do |exon|
-
-# 			exon_start_pos = dnaseq_length
-# 			exon_length = (exon["dna_end"] - exon["dna_start"]).abs # TODO dna_end/dna_start
-
-# 			# adjust exon_length
-# 			# 1) additional bases in dna that are not translated
-# 			exon["seqshifts"].each do |seqshift|
-
-# 				seqshift_length = (seqshift["dna_end"] - seqshift["dna_start"]).abs
-# 				prot_pos = seqshift["prot_end"]
-			
-# 				# sequence shift is not translated => subtract from exon length
-# 				exon_length -= seqshift_length
-
-# 				# ups, removed too many nucleotides
-# 				if exon["undeterminedlist"].include?(prot_pos) then 
-# 					exon_length += 3
-# 				end
-# 				if exon["inframe_stopcodons"].include?(prot_pos) then 
-# 					exon_length += 3
-# 				end
-
-# 			end
-# 			exon_stop_pos = exon_start_pos +  exon_length
-# 			exon_obj = Exon.new(exon_start_pos, exon_stop_pos)
-
-# 			# add length of this exon to dnaseq; only needed for next exon
-# 			dnaseq_length += exon_length
-			
+			exon_offset_due_to_splitcodon = phase	
 
 			intron = get_intron_by_number(exon["number"])
 			# due to webscipio "Gap", intron might not exist
