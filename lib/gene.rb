@@ -4,9 +4,9 @@ class Gene
 	attr_accessor :aligned_seq, :exons, :introns, :taxonomic_lineage, :ind_first_uniq_ancestor
 	attr_reader :name
 
-	def initialize(name)
+	def initialize(name, aligned_seq)
 		@name = name
-		@aligned_seq = nil
+		@aligned_seq = aligned_seq
 		@exons = [] # exon objects in their correct order
 		@introns = [] # intron objects in their correct order
 
@@ -15,8 +15,7 @@ class Gene
 	end
 
 	# set instance variable @aligned_seq and also exon/intron position in alignment
-	def add_aligned_seq(aligned_seq)
-		@aligned_seq = aligned_seq
+	def add_aligned_seq
 		@exons.each do |exon|
 			exon.set_variables_describing_exon_in_aligned_seq(aligned_seq)		
 		end

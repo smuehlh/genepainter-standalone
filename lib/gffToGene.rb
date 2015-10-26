@@ -1,8 +1,11 @@
 # reads a GFF file and returns a gene object
 class GffToGene
-	def initialize(data, name)
-		@gene = Gene.new(name) # gene object referring to all exon and intron objects
+	def initialize(data, name, alignment_seq)
+		@gene = Gene.new(name, alignment_seq) # gene object referring to all exon and intron objects
 		@data = extract_cds_parts_from_gff(data) # reduce raw data to "important" parts
+		
+		# no need to save alignment_seq, as the queryseq is not included in standard GFF ...
+		# -> not possbile to check if both match
 	end
 
 	# extracts all lines describing one (or the onliest) transkript

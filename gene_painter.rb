@@ -49,15 +49,15 @@ aligned_seqs_names, aligned_seqs = Sequence.read_in_alignment(options[:path_to_a
 puts  " done."
 
 ## genes
-gene_names = [] # a list of all gene names
+genes_with_yaml = [] # a list of all gene names
 Dir.glob( File.join(options[:path_to_genestruct], "*.{yaml,gff3,gff}") ) do |file|
 	f_name = File.basename(file, ".*")
-	gene_names << f_name
+	genes_with_yaml << f_name
 end
 
 ## initialize 
 gene_objects = [] # a list of all gene objects
-common_names = aligned_seqs_names & gene_names
+common_names = aligned_seqs_names & genes_with_yaml
 genes_selected_for_output = [] # list of all gene names which are selected for output or data analysis
 selection_criterium = nil
 
@@ -143,6 +143,7 @@ end
 introns_before_gap_pos_gene = {}
 
 # merge gene structure and sequence (and taxonomy, if present) into a gene object
+genes_with_geneobj = []
 common_names.each_with_index do |gene_name, ind|
 
 	# if selection is based on regexp, apply it to gene name
@@ -170,13 +171,14 @@ common_names.each_with_index do |gene_name, ind|
 	# read in file and parse gene structure
 	data_obj = nil
 	data = IO.read(file)
+	aligned_seq = common_aligned_seqs[ind]
 	if f_extension.casecmp(".yaml") == 0 then
 		# yaml format
-		data_obj = YamlToGene.new(data, gene_name)
+		data_obj = YamlToGene.new(data, gene_name, aligned_seq)
 
 	elsif f_extension.casecmp(".gff") == 0 || f_extension.casecmp(".gff3") == 0  then
 		# gff format
-		data_obj = GffToGene.new(data, gene_name)
+		data_obj = GffToGene.new(data, gene_name, aligned_seq)
 
 	else
 		Helper.abort("Cannot parse gene structure. Unknown file type #{file}.")
@@ -185,10 +187,11 @@ common_names.each_with_index do |gene_name, ind|
 	# create a gene object with this structure and sequence
 	is_success = catch(:error) do  
 		gene_obj = data_obj.to_gene # method to_gene returns a gene object containing the structure
-		gene_obj.add_aligned_seq(common_aligned_seqs[ind]) # ... and aligned sequence
+		gene_obj.add_aligned_seq # ... merge aligned sequence with gene structure
 		gene_obj.reduce_gene_to_range(options[:range]) if options[:range][:reverse_position].any?
 		gene_obj.add_taxonomy(taxonomy_obj.to_gene(gene_name)) if taxonomy_obj
-		gene_objects << gene_obj
+		gene_objects.push gene_obj
+		genes_with_geneobj.push gene_name
 
 		# collect all positions of introns before gap-positions in aligned sequence
 		if options[:best_intron_pos] then 
@@ -198,7 +201,7 @@ common_names.each_with_index do |gene_name, ind|
 		end
 		true
 	end
-	if ! is_success then 
+	if ! is_success then 	
 		Helper.warn "Skipping gene #{gene_name}"
 	end
 end
@@ -206,7 +209,7 @@ end
 puts " done."
 
 if gene_objects.size == 0 then 
-	Helper.abort "0 genes selected. Nothing to do."
+	Helper.abort "No genes selected. Nothing to do."
 end
 
 
@@ -218,7 +221,7 @@ if options[:best_intron_pos] && introns_before_gap_pos_gene.any? then
 end
 
 # inform which data are not used
-Helper.print_intersect_and_diff_between_alignment_and_gene(aligned_seqs_names, gene_names)
+Helper.print_intersect_and_diff_between_alignment_and_gene(aligned_seqs_names, genes_with_geneobj)
 if taxonomy_obj then 
 	options[:tax_options][:selected_taxa] ||= [] # set empty selected_taxa explicitly to empty array
 	genes_belonging_to_selected_taxa = options[:tax_options][:selected_taxa].collect do |taxon|

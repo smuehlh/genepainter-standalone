@@ -1,9 +1,11 @@
 # reads in a yaml file and returns a gene object
 class YamlToGene
 
-	def initialize(data, name)
-		@gene = Gene.new(name) # gene object referring to all exon and intron objects
+	def initialize(data, name, alignment_seq)
+		@gene = Gene.new(name, alignment_seq) # gene object referring to all exon and intron objects
 		@contigs = YAML.load( data ) # raw_data, which are different contigs
+		@alignment_seq = alignment_seq
+
 		ensure_contigs_format
 		ensure_exon_intron_numbers
 	end
@@ -44,68 +46,96 @@ class YamlToGene
 	end
 
 	def to_gene
-		# a gene object needs exons and introns (and the aligned sequence, which is added somewhere else)
+		# reject genes with queryseq other than alignment-sequence
+		query_seq = @contigs[0]["prot_seq"]
 
-		exon_offset_due_to_seqshifts = 0 # offset due to seqshifts etc.
+		# mimic formatting of queryseq done by scipio:
+		scipio_formatted_alignment_seq = @alignment_seq.upcase
+		scipio_formatted_alignment_seq = scipio_formatted_alignment_seq.gsub("*", "X")
+		scipio_formatted_alignment_seq = scipio_formatted_alignment_seq.gsub(/[^ACDEFGHIKLMNPQRSTVWYX]/, "")
+		if scipio_formatted_alignment_seq != query_seq then 
+			# rejecting gene...
+	    	Helper.log "#{@gene.name}: Aligned sequence does not match gene structure."
 
-		# method exons_original returns only exons, no alternative transkripts
+	    	throw(:error)
+		end
+
+		exon_offset_due_to_splitcodon = 0
 		exons_original.each do |exon|
-			start_pos, stop_pos = exon["nucl_start"], exon["nucl_end"]
 
-			exon_start_cdna = start_pos + exon_offset_due_to_seqshifts
-			exon_end_cdna = exon_start_cdna + (stop_pos - start_pos) # start + length
+			# determine exon lenght based on the corresponding querysequence length and the phase
+			# with this, sequence shifts are automatically accounted for!
 
-			undetermined_pos = exon["undeterminedlist"] || []
-			inframe_stop_pos = exon["inframe_stopcodons"] || []
-	
-			exon["seqshifts"].each do |seqshift|
-	
-				additional_target_seq = (seqshift["dna_end"]-seqshift["dna_start"]).abs 
-				# when altering these conditions, please verify inframe-stopcodons and sequenceshifts are still recognized.
-				# test with e.g. OtgMhc15 and TnMyo1Ea
-				if ( seqshift["nucl_start"] == seqshift["nucl_end"] && 
-						! is_phase_2(additional_target_seq) &&
-						! undetermined_pos.include?(seqshift["prot_start"]) && 
-						( seqshift["prot_start"] != seqshift["prot_end"] ||	
-							inframe_stop_pos.include?(seqshift["prot_start"])
-						)
-					) || 
-					( seqshift["nucl_start"] != seqshift["nucl_end"] && is_phase_1(additional_target_seq) ) then
-					# genomic dna contains stop codon, that is not translated or a sequence shift.
-					missing_target_seq = fill_up_codons(additional_target_seq)
-					exon_end_cdna += missing_target_seq
+			prot_start = exon["prot_start"]
+			prot_end = exon["prot_end"]
+			prot = query_seq[prot_start...prot_end]
+			exon_length = prot.size * 3
 
-					exon_offset_due_to_seqshifts += missing_target_seq
-				end
+			phase = exon["nucl_end"] % 3
+			if phase == 2 then 
+				# fix yaml: split-codon phase 2 belongs to preceeding exon
+				phase = -1
+			end	
 
-				if (seqshift["nucl_start"] < seqshift["nucl_end"] &&
-						seqshift["dna_start"] == seqshift["dna_end"]
-				) then 
-					# genomic dna contains additional bases, that are not translated.
-					superfluous_target_seq = (exon["seqshifts"][0]["nucl_start"] - exon["seqshifts"][0]["nucl_end"]).abs
-					exon_end_cdna -= superfluous_target_seq
+			# add nucleotides of splitcodon at exon-end (phase); subtract split-codons added to last exon (at exon-start; offset)
+			exon_length = exon_length + phase - exon_offset_due_to_splitcodon
 
-					exon_offset_due_to_seqshifts -= superfluous_target_seq
-				end
+			exon_start_pos = exon["nucl_start"]
+			exon_stop_pos = exon_start_pos + exon_length
 
-			end
-
-			exon_obj = Exon.new(exon_start_cdna, exon_end_cdna)
+			exon_obj = Exon.new(exon_start_pos, exon_stop_pos)
 			@gene.exons.push(exon_obj)
 
-			intron = intron_by_intronnumber(exon["number"])
+			# nucleotides added for split codon have to be subtracted from next exon
+			exon_offset_due_to_splitcodon = phase
+
+# 		dnaseq_length = 0
+# 		# all exons, without alternative transcripts
+# 		exons_original.each do |exon|
+
+# 			exon_start_pos = dnaseq_length
+# 			exon_length = (exon["dna_end"] - exon["dna_start"]).abs # TODO dna_end/dna_start
+
+# 			# adjust exon_length
+# 			# 1) additional bases in dna that are not translated
+# 			exon["seqshifts"].each do |seqshift|
+
+# 				seqshift_length = (seqshift["dna_end"] - seqshift["dna_start"]).abs
+# 				prot_pos = seqshift["prot_end"]
+			
+# 				# sequence shift is not translated => subtract from exon length
+# 				exon_length -= seqshift_length
+
+# 				# ups, removed too many nucleotides
+# 				if exon["undeterminedlist"].include?(prot_pos) then 
+# 					exon_length += 3
+# 				end
+# 				if exon["inframe_stopcodons"].include?(prot_pos) then 
+# 					exon_length += 3
+# 				end
+
+# 			end
+# 			exon_stop_pos = exon_start_pos +  exon_length
+# 			exon_obj = Exon.new(exon_start_pos, exon_stop_pos)
+
+# 			# add length of this exon to dnaseq; only needed for next exon
+# 			dnaseq_length += exon_length
+			
+
+			intron = get_intron_by_number(exon["number"])
 			# due to webscipio "Gap", intron might not exist
 			if ! intron.nil? then  
 			
 				intron_length = intron["seq"].size
-				pos, phase = intron_phase_and_position_in_dna(exon_end_cdna) # last nt before intron	
+				pos, phase = intron_phase_and_position_in_dna(exon_stop_pos) # last nt before intron	
 
-				intron_obj = Intron.new(exon_end_cdna, # last nt before intron
+				intron_obj = Intron.new(exon_stop_pos, # last nt before intron
 					intron_length, # intron length
 					phase # phase
-					)
+					)	
 				@gene.introns.push(intron_obj)
 			end
+
 		end
 
 		return @gene
@@ -139,7 +169,7 @@ class YamlToGene
 		return pos, phase
 	end
 	
-	def intron_by_intronnumber(num)
+	def get_intron_by_number(num)
 		# method "introns" returns all (complete) introns and all uncertain introns!
 		introns.each do |intron|
 			if intron["number"] == num then 
@@ -166,7 +196,6 @@ class YamlToGene
 		n_codons = num / 3
 		return n_codons * 3 + 2 == num 
 	end
-
 
 	### methods from webscipio
 
