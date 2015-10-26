@@ -57,7 +57,7 @@ class Intron
 
 	def convert_dna_pos_into_protein_pos(pos)
 		# convert position in dna sequence into position in amino acid sequence
-		# round is important to "fix" introns of phase 2
+		# floor is important to "fix" introns of phase 2
 
 		return (pos / 3.0).floor
 	end
