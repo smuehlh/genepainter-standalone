@@ -331,28 +331,6 @@ class Gene
 	# 	end
 	# end
 
-	def get_all_gap_boundaries_preceeded_by_intron
-		@introns.collect do |intron|
-
-			char_after_intron_in_alignment = @aligned_seq[ intron.pos_last_aa_in_aligned_protein_before_intron + 1]
-			if char_after_intron_in_alignment == "-" then
-				# intron is located before an gap
-
-				# but due to some very strange gene prediction, the intron might split the very last codon (yes, seen once!)
-				begin
-					gap = @aligned_seq[ intron.pos_last_aa_in_aligned_protein_before_intron + 1 .. -1].match(/(-+)[^-]/)[1]
-				rescue
-					gap = ""
-				end
-				pos_gap_end = intron.pos_last_aa_in_aligned_protein_before_intron + gap.size # last position of gap
-
-				[intron.pos_last_aa_in_aligned_protein_before_intron, pos_gap_end]
-			else
-				nil
-			end
-		end.compact
-	end
-
 	# a sequence of same length as "@aligned_seq" consisting of gaps and intron phases only
 	# exon_representation will be used to display exon, default: "-"
 	# intron_representation will be used to display intron, default: intron phase

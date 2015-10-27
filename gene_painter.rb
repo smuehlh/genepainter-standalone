@@ -138,10 +138,6 @@ if options[:ignore_common_gaps] then
 		Sequence.remove_common_gaps_in_alignment_update_predefined_ranges(common_aligned_seqs, options[:range] ) 
 end
 
-# special case: gap before/after intron
-# correct intron position (default: before gap) if there is any other sequence with and intron at same pos as gap-end
-introns_before_gap_pos_gene = {}
-
 # merge gene structure and sequence (and taxonomy, if present) into a gene object
 genes_with_geneobj = []
 common_names.each_with_index do |gene_name, ind|
@@ -193,12 +189,6 @@ common_names.each_with_index do |gene_name, ind|
 		gene_objects.push gene_obj
 		genes_with_geneobj.push gene_name
 
-		# collect all positions of introns before gap-positions in aligned sequence
-		if options[:best_intron_pos] then 
-			gene_obj.get_all_gap_boundaries_preceeded_by_intron.each do |intron_pos, gap_end|
-				(introns_before_gap_pos_gene[intron_pos] ||= []).push( [gene_name, gap_end] )
-			end
-		end
 		true
 	end
 	if ! is_success then 	
@@ -210,14 +200,6 @@ puts " done."
 
 if gene_objects.size == 0 then 
 	Helper.abort "No genes selected. Nothing to do."
-end
-
-
-if options[:best_intron_pos] && introns_before_gap_pos_gene.any? then 
-	print "Correcting intron positions flanking alignment gaps ..."
-
-	Sequence.correct_introns_flanking_gaps(introns_before_gap_pos_gene, gene_objects)
-	puts " done."
 end
 
 # inform which data are not used

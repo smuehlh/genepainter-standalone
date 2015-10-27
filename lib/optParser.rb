@@ -43,8 +43,6 @@ class OptParser
 		options[:pdb_options] = {} # options for pdb output, only set if pdb_output is requested
 		options[:tax_options] = {} # options for taxonomy output, only set if taxonomy is requested
 
-		options[:best_intron_pos] = true # align intron positions which differ only by alignment gaps
-
 		options[:selection] = { analyse_all_output_sel: nil, analyse_sel_output_sel: nil, analyse_sel_on_all_output_sel: nil, no_selection: nil }
 		options[:select_by] = { regex: nil, list: nil, species: nil, no_selection: nil } # selection criteria: species, list, or regular expression
 
@@ -366,12 +364,6 @@ class OptParser
 			opts.on("--keep-common-gaps", 
 				"Keep common gaps in alignment") do
 				options[:ignore_common_gaps] = false
-			end
-
-			opts.on("--no-best-position-introns", 
-				"Plot introns always onto beginning of a gap",
-				"Default: Align introns if their position differs by alignment gaps only") do 
-				options[:best_intron_pos] = false
 			end
 
 			opts.on("--[no-]separate-introns-in-textbased-output", 
