@@ -146,8 +146,6 @@ General options:
                                      Keyword 'end' might be used to mark last position in alignment
         --[no-]delete-range          (Not) Delete specified range
         --keep-common-gaps           Keep common gaps in alignment
-        --no-best-position-introns   Plot introns always onto beginning of a gap
-                                     Default: Align introns if their position differs by alignment gaps only
         --[no-]separate-introns-in-textbased-output
                                      (Not) Separate each consecutive pair of introns by an exon placeholder in text-based output formats.
                                      Default: Separate introns unless the output lines get too long.
