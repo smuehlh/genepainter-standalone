@@ -47,7 +47,7 @@ class YamlToGene
 
 	def to_gene
 		# reject genes with queryseq other than alignment-sequence
-		query_seq = @contigs[0]["prot_seq"]
+		query_seq = get_queryseq
 
 		# mimic formatting of queryseq done by scipio:
 		scipio_formatted_alignment_seq = @alignment_seq.upcase
@@ -108,14 +108,6 @@ class YamlToGene
 		return @gene
 	end
 
-	def correct_intron_position_in_protein_for_phase(pos, phase)
-		# only necessary if the position is in amino acids
-		if phase == 2 then
-			pos += 1
-		end
-		return pos
-	end
-
 	# first nucleotide of gene has position 0
 	# =>  "nucl_start" gives position in dna sequnce (and phase)
 	def intron_phase_and_position_in_dna(nucleotide_pos)
@@ -124,18 +116,6 @@ class YamlToGene
 		return pos, phase
 	end
 
-	# first nucleotide of gene has position 0, so "nucl_start" gives position in dna sequence and phase
-	def intron_phase_and_position_in_protein(nucleotide_pos)
-		# starting nucleotide modulus 3 equals the intron phase (3 nucleotides code for 1 amino acid)
-		phase = nucleotide_pos.to_i % 3
-
-		# starting nucleotide equals intron start
-		pos = nucleotide_pos.to_i
-		pos = correct_intron_position_in_protein_for_phase(pos, phase) # only if pos in amino acids
-
-		return pos, phase
-	end
-	
 	def get_intron_by_number(num)
 		# method "introns" returns all (complete) introns and all uncertain introns!
 		introns.each do |intron|
@@ -146,22 +126,9 @@ class YamlToGene
 		# no intron with corresponding number found
 		return nil
 	end
-	def fill_up_codons(num)
-		if is_phase_1(num) then 
-			num += 2
-		elsif is_phase_2(num)
-			num += 1
-		end
-		# phase 3 : nothing to do, already a valid codon
-		return num
-	end
-	def is_phase_1(num)
-		n_codons = num / 3
-		return n_codons * 3 + 1 == num
-	end
-	def is_phase_2(num)
-		n_codons = num / 3
-		return n_codons * 3 + 2 == num 
+
+	def get_queryseq
+		@contigs.collect{|contig| contig["prot_seq"]}.join
 	end
 
 	### methods from webscipio
