@@ -220,7 +220,7 @@ class GeneAlignment2svg
 		# introns
 		@all_intronpos_with_maxlength.keys.sort.each_with_index do |pos, ind|
 			intron_startpos_drawing = calc_pos_drawing( pos, "intron" )
-			class_name = "intron_#{ind}"
+			class_name = "intron-index-#{ind}"
 			if @is_default_color_scheme then 
 				intron_length = @all_intronpos_with_maxlength[pos]
 				intron_color = svg_obj.colors[:intron]
