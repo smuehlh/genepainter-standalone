@@ -14,6 +14,7 @@ class YamlToGene
 	# but might also be an hash containing gene structures for more than one gene
 	# in this case: extract the structure with has same name as @gene.name
 	# if this is not included in @contig, abort
+	# WARNING: all changes here might affect the web server
 	def ensure_contigs_format
 		if @contigs.kind_of?(Hash) then
 			if @contigs[@gene.name] then
@@ -45,15 +46,22 @@ class YamlToGene
 		end
 	end
 
-	def to_gene
-		# reject genes with queryseq other than alignment-sequence
+	# reject genes with queryseq other than alignment-sequence
+	def does_aligned_sequence_match
 		query_seq = get_queryseq
 
 		# mimic formatting of queryseq done by scipio:
 		scipio_formatted_alignment_seq = @alignment_seq.upcase
 		scipio_formatted_alignment_seq = scipio_formatted_alignment_seq.gsub("*", "X")
 		scipio_formatted_alignment_seq = scipio_formatted_alignment_seq.gsub(/[^ACDEFGHIKLMNPQRSTVWYX]/, "")
-		if scipio_formatted_alignment_seq != query_seq then 
+
+		return scipio_formatted_alignment_seq == query_seq 
+	end
+
+	def to_gene
+		# reject genes with queryseq other than alignment-sequence
+		query_seq = get_queryseq
+		if ! does_aligned_sequence_match then 
 			# rejecting gene...
 	    	Helper.log "#{@gene.name}: Aligned sequence does not match gene structure."
 

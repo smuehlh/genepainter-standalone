@@ -10,6 +10,7 @@ class GffToGene
 
 	# extracts all lines describing one (or the onliest) transkript
 	# sets the start position of very first exon (this is necessary to have 0-based @gene objects)
+	# WARNING: all changes here might affect the web server
 	def extract_cds_parts_from_gff(gff)
 		gff = gff.lines
 		if gff.any? {|line| line.include?("ScipioResult")} then
