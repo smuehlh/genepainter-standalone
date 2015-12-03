@@ -14,7 +14,7 @@ class YamlToGene
 	# but might also be an hash containing gene structures for more than one gene
 	# in this case: extract the structure with has same name as @gene.name
 	# if this is not included in @contig, abort
-	# WARNING: all changes here might affect the web server
+	# NOTE: adapat is_yaml method of webserver when changing this method!
 	def ensure_contigs_format
 		if @contigs.kind_of?(Hash) then
 			if @contigs[@gene.name] then
@@ -47,6 +47,7 @@ class YamlToGene
 	end
 
 	# reject genes with queryseq other than alignment-sequence
+	# NOTE: adapat is_yaml method of webserver when changing this method!
 	def does_aligned_sequence_match
 		query_seq = get_queryseq
 
@@ -135,6 +136,7 @@ class YamlToGene
 		return nil
 	end
 
+	# NOTE: adapat is_yaml method of webserver when changing this method!
 	def get_queryseq
 		@contigs.collect{|contig| contig["prot_seq"]}.join
 	end
