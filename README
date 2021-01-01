@@ -1,44 +1,66 @@
-GenePainter v.2.0 maps gene structures onto multiple sequence alignments
-Contact: Martin Kollmar (mako[at]nmr.mpibpc.mpg.de)
+# README
+
+A commandline tool for mapping gene structures onto multiple sequence alignments.
+
+__Author__ Stefanie Mühlhausen
+__Affiliation__ Martin Kollmar
+__Contact__ Martin Kollmar (mako@nmr.mpibpc.mpg.de)
+
+This program comes with ABSOLUTELY NO WARRANTY
+
+This project has been developed 2012-2015.
+
+## Requirements
+
+- Ruby 2.1
+
+## When using our software, pleace cite
+
+> Stefanie Mühlhausen, Marcel Hellkamp,  Martin Kollmar (2015).
+> GenePainter 2.0 resolves the taxonomic distribution of intron positions
+> _Bioinformatics_ 31, 8
+> [https://doi.org/10.1186/1471-2105-14-77](https://doi.org/10.1186/1471-2105-14-77)
+
+> Björn Hammesfahr, Florian Odronitz, Stefanie Mühlhausen, Stephan Waack, Martin Kollmar (2013).
+> GenePainter: a fast tool for aligning gene structures of eukaryotic protein families, visualizing the alignments and mapping gene structures onto protein structures.
+> _BMC Bioinformatics_ 14, 77
+> [https://doi.org/10.1093/bioinformatics/btu798](https://doi.org/10.1093/bioinformatics/btu798)
+
+## Licence
+
+GNU GPL
 
 
-INTRODUCTION
-------------
+## Introduction
+
 The conservation of intron positions comprises information useful for de novo gene prediction as well as for analyzing the origin of introns. Here, we present GenePainter, a standalone tool for mapping gene structures onto pr
-otein multiple sequence alignments (MSA). Gene structures, as provided by WebScipio, are aligned with respect to the exact positions of the introns (down to nucleotide level) and intron phase. Output can be viewed in various 
+otein multiple sequence alignments (MSA). Gene structures, as provided by WebScipio, are aligned with respect to the exact positions of the introns (down to nucleotide level) and intron phase. Output can be viewed in various
 formats, ranging from plain text to graphical output formats.
 
+## Installation
 
-Restrictions and Licence
-------------------------
-GenePainter can be used under a GNU General Public License.
+### Unpack
 
-
-INSTALLATION
-------------
-
-Unpack
-------
 Use one of the following methods, depending on the type of your archive file:
 $ unzip gene_painter.zip
 $ tar -xzf gene_painter.tgz
 
 
-Compilation
------------
+### Compilation
+
 No compilation required.
 
 
-Ruby version
-------------
-Ruby version 2.0.0 or higher is required. If necessary, consider using Ruby Version Manager (RVM; https://rvm.io/) to install and work with multiple ruby environments on your machine. 
+### Ruby version
+
+Ruby version 2.0.0 or higher is required. If necessary, consider using Ruby Version Manager (RVM; https://rvm.io/) to install and work with multiple ruby environments on your machine.
 
 
-RUNNING GENEPAINTER
--------------------
+## RUNNING GENEPAINTER
 
-Ruby interpreter
-----------------
+
+### Ruby interpreter
+
 Invoke GenePainter via one of the following options:
 
 1) as a script
@@ -47,17 +69,17 @@ $ ruby gene_painter.rb
 2) as a program
 $ ./gene_painter.rb
 
-Usage
------
+### Usage
+
 Usage: gene_painter.rb -i path_to_alignment -p path_to_genestructure_folder [options]
 Standard output format: Mark exons by '-' and introns by '|'
 
     -i, --input <path_to_alignment>  Path to fasta-formatted multiple sequence alignment
-    -p <path_to_genestructures>,     Path to folder containing gene structures in YAML or GFF format. 
+    -p <path_to_genestructures>,     Path to folder containing gene structures in YAML or GFF format.
         --path                       Required file extension is one of .yaml, .gff, .gff3.
 
-Options
--------
+### Options
+
 Text-based output format:
         --intron-phase               Mark introns by their phase instead of '|'
         --phylo                      Mark exons by '0' and introns by '1'
